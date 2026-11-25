@@ -6,7 +6,7 @@
 
 Why not a new extension (`.othor`, `.patch`, `.gpf`)?
 
-* Every tool that matters already writes `.thor`: GRF Editor, ThorGenerator, `rgrf thor create`, rpatchur's `mkpatch`.
+* Every tool that matters already writes `.thor`: GRF Editor, ThorGenerator, `rgrf thor create` (RustyGRF), rpatchur's `mkpatch`.
   A new container would be read by nobody but us.
 * A `.thor` already carries what we need: files and folders for a GRF (or loose files), per-file removal, zlib. What
   it lacks (signature, hash, order, target) belongs into the **patch list**, not into the container.

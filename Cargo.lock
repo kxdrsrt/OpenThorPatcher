@@ -2647,6 +2647,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "otp-testkit"
+version = "0.1.0"
+dependencies = [
+ "rgrf-core",
+]
+
+[[package]]
 name = "pango"
 version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3270,7 +3277,6 @@ dependencies = [
 [[package]]
 name = "rgrf-core"
 version = "0.2.3"
-source = "git+https://github.com/kxdrsrt/RustyGRF?rev=63b76c29f8d20c906df83a7b882b09bc648a9fa9#63b76c29f8d20c906df83a7b882b09bc648a9fa9"
 dependencies = [
  "aes",
  "crc32fast",

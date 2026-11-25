@@ -1,0 +1,10 @@
+[package]
+name = "otp-testkit"
+description = "Test helper for tests/e2e.sh: build/extract GRFs and make Thor patches (not shipped)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+rgrf-core = { path = "../../vendor/rgrf-core" }

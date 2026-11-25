@@ -89,8 +89,9 @@ swapped in; the old file is **replaced completely**, a `.bak` only stays with `-
 - **Removal everywhere:** entries inside GRFs (Thor delete directives), loose files and whole folders.
 - **Integrity:** per-file SHA-256, signed patch list, a damaged download never replaces anything, a damaged GRF is
   repaired from a full copy, the merged GRF is checked before it is swapped in.
-- **GRF 0x102–0x300 and GRF Editor encryption** (through [RustyGRF](https://github.com/kxdrsrt/RustyGRF) as a library
-  linked into the program; players do **not** install anything).
+- **GRF 0x102–0x300 and GRF Editor encryption** (the GRF code of [RustyGRF](https://github.com/kxdrsrt/RustyGRF) is
+  included as a vendored copy in `vendor/rgrf-core` and linked into the program: no RustyGRF, no network and no other
+  tool is needed to build or run OpenThor).
 - **Still `.thor`:** reads every Thor patch and the classic `plist.txt` server layout, so an existing patch server works
   unchanged (merge patches and loose-file patches).
 - **Several sources, one master version:** the patch list is read from every source you give, the newest valid one wins, a stale or dead mirror changes nothing, a client never rolls back, every file is checked by SHA-256 (see [docs/HOSTING.md](docs/HOSTING.md)).

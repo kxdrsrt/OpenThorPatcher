@@ -1,9 +1,12 @@
 #!/bin/sh
 # End-to-end: publish a master client, patch player clients from the site (file:// mirror).
-# Needs `rgrf` (RustyGRF CLI, only to build the test GRFs) and a built `otp`.  Usage: tests/e2e.sh [path/to/otp]
+# Needs a built `otp` and `otp-testkit` (both from this workspace: cargo build -p otp-cli -p otp-testkit).
+# Usage: tests/e2e.sh [path/to/otp]   (otp-testkit is taken from the same folder)
 set -eu
 OTP=${1:-target/debug/otp}
 OTP=$(cd "$(dirname "$OTP")" && pwd)/$(basename "$OTP")
+TK=$(dirname "$OTP")/otp-testkit
+[ -x "$TK" ] || { echo "missing $TK (cargo build -p otp-testkit)"; exit 1; }
 W=$(mktemp -d)
 trap '[ -n "${KEEP:-}" ] || rm -rf "$W"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
@@ -20,8 +23,8 @@ for ENC in plain encrypted; do
   i=1; while [ $i -le 40 ]; do echo "tex $i" > "$M/src/data/texture/t$i.txt"; i=$((i+1)); done
   echo "v1" > "$M/odin.cfg"; echo "dark" > "$M/odin-dark.grf"
   # shellcheck disable=SC2086
-  rgrf build -q $PW -o "$M/data.grf" "$M/src" >/dev/null
-  rgrf build -q -o "$M/odin.grf" "$M/src" >/dev/null
+  "$TK" build $PW -o "$M/data.grf" "$M/src" >/dev/null
+  "$TK" build -o "$M/odin.grf" "$M/src" >/dev/null
 
   "$OTP" keygen --out "$D/keys" >/dev/null
   cat > "$D/project.json" <<EOF
@@ -70,7 +73,7 @@ EOF
   echo "v2" > "$M/odin.cfg"
   rm "$M/data.grf"
   # shellcheck disable=SC2086
-  rgrf build -q $PW -o "$M/data.grf" "$M/src" >/dev/null
+  "$TK" build $PW -o "$M/data.grf" "$M/src" >/dev/null
   pub > "$D/pub2.log" || { cat "$D/pub2.log"; fail "$ENC publish 2"; }
   grep -q "0001-data.thor: 1 new, 1 changed, 1 removed" "$D/pub2.log" || { cat "$D/pub2.log"; fail "$ENC patch content"; }
   pub > "$D/pub3.log"; grep -q "no changes" "$D/pub3.log" || fail "$ENC idempotent publish"
@@ -79,9 +82,9 @@ EOF
   pat > "$D/p2.log" || { cat "$D/p2.log"; fail "$ENC patch 2"; }
   grep -q "1 patch" "$D/p2.log" || fail "$ENC patch 2 count"
   # shellcheck disable=SC2086
-  rgrf extract -q $RP "$P/data.grf" "$D/xp" >/dev/null 2>&1 || fail "$ENC extract player"
+  "$TK" extract $RP "$P/data.grf" "$D/xp" >/dev/null 2>&1 || fail "$ENC extract player"
   # shellcheck disable=SC2086
-  rgrf extract -q $RP "$M/data.grf" "$D/xm" >/dev/null 2>&1 || fail "$ENC extract master"
+  "$TK" extract $RP "$M/data.grf" "$D/xm" >/dev/null 2>&1 || fail "$ENC extract master"
   diff -r "$D/xp" "$D/xm" >/dev/null || fail "$ENC patched GRF differs from master"
   [ ! -e "$P/data.grf.bak" ] || fail "$ENC old GRF was kept although --keep-backup was not given"
   ok "$ENC: patched GRF content == master (changed, new and removed entries), the old GRF is replaced completely (no .bak)"
@@ -114,14 +117,14 @@ done
 # ---- classic Thor Patcher server (plist.txt + .thor), merge and loose patches --------------------------------------
 D="$W/legacy"; S="$D/site"; P="$D/player"; mkdir -p "$S" "$D/m/data/texture" "$D/l" "$P"
 echo a > "$D/m/data/texture/a.txt"; echo b > "$D/m/data/texture/b.txt"
-rgrf build -q -o "$P/data.grf" "$D/m" >/dev/null
+"$TK" build -o "$P/data.grf" "$D/m" >/dev/null
 echo c > "$D/m/data/texture/c.txt"; rm "$D/m/data/texture/a.txt"
-rgrf thor create -q --merge-into-grf --target data.grf --remove 'data\texture\a.txt' -o "$S/001 merge.thor" "$D/m" >/dev/null
+"$TK" thor --merge-into-grf --target data.grf --remove 'data\texture\a.txt' -o "$S/001 merge.thor" "$D/m" >/dev/null
 echo loose > "$D/l/readme.txt"; mkdir -p "$D/l/sub"; echo s > "$D/l/sub/s.txt"
-rgrf thor create -q -o "$S/002 loose.thor" "$D/l" >/dev/null
+"$TK" thor -o "$S/002 loose.thor" "$D/l" >/dev/null
 printf '// classic list\r\n1 001 merge.thor\r\n2 002 loose.thor\r\n' > "$S/plist.txt"
 "$OTP" patch --url "file://$S" --client "$P" > "$D/p1.log" || { cat "$D/p1.log"; fail "legacy patch"; }
-rgrf extract -q "$P/data.grf" "$D/x" >/dev/null 2>&1 || fail "legacy extract"
+"$TK" extract "$P/data.grf" "$D/x" >/dev/null 2>&1 || fail "legacy extract"
 [ -f "$D/x/data/texture/c.txt" ] && [ -f "$D/x/data/texture/b.txt" ] && [ ! -e "$D/x/data/texture/a.txt" ] || fail "legacy merge result"
 [ "$(cat "$P/readme.txt")" = loose ] && [ "$(cat "$P/sub/s.txt")" = s ] || fail "legacy loose patch"
 "$OTP" patch --url "file://$S" --client "$P" | grep -q "0 patch" || fail "legacy second run"

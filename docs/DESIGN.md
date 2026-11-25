@@ -22,10 +22,11 @@ reused with attribution.
 
 ## 2. Building blocks
 
-* **RustyGRF `rgrf-core`** (library, pinned git revision): open/merge/patch/verify/encrypt GRF 0x102-0x300, GPF, GSF,
-  Thor, RGZ, repack, hash lists. It is **compiled into** the programs: players and operators do **not** need RustyGRF
-  installed (the `rgrf` CLI is only used by the test script to build sample GRFs). Reusing its source avoids a second,
-  worse GRF implementation; anything missing is fixed in RustyGRF, which also serves as the hard test of that library.
+* **`rgrf-core`** from RustyGRF, as a **vendored copy** in `vendor/rgrf-core` (revision in `VENDORED.md`, refreshed with
+  `tools/vendor-rgrf-core.sh`): open/merge/patch/verify/encrypt GRF 0x102-0x300, GPF, GSF, Thor, RGZ, repack, hash
+  lists. It is **compiled into** the programs, and this repository builds and tests without RustyGRF (no git
+  dependency, no `rgrf` program; `tests/e2e.sh` uses the small `otp-testkit` of this workspace). Reusing its source avoids
+  a second, worse GRF implementation; fixes are made in RustyGRF and copied here.
 * **Tauri 2** (same stack as RustyGRF and the OdinGuard Studio) for the window; the page is plain HTML/CSS/JS that an
   operator can replace. **[offen]** WebView2 does not run on Windows 7/8.1; many Ragnarok players still use them. Two
   answers to measure: a Windows 7 capable build (older WebView runtime, or a tiny native UI), and a `--no-ui` mode that
