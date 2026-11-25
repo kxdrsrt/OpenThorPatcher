@@ -39,8 +39,9 @@ body { font: 13px/1.5 system-ui, "Segoe UI", sans-serif; color: var(--text); }
 }
 .frame::before { left: 8px; } .frame::after { right: 8px; }
 .bar { border-bottom: 1px solid rgba(150, 175, 225, .14); padding-left: 28px; padding-right: 26px; }
-.who span { font-family: var(--display); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-shadow: 0 1px 0 #000, 0 0 10px rgba(233,196,106,.35); }
+.who > span { font-family: var(--display); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-shadow: 0 1px 0 #000, 0 0 10px rgba(233,196,106,.35); }
 .who i { color: var(--muted); }
+.srv-item { color: var(--steel-hi); font-family: system-ui, "Segoe UI", sans-serif; text-transform: none; letter-spacing: 0; text-shadow: none; }
 .wbtn { background: linear-gradient(180deg, #2b3f72, #16254a); border: 1px solid var(--steel); color: var(--steel-hi); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); transition: filter .12s ease-out, transform .1s ease-out; }
 .wbtn:hover { filter: brightness(1.25); } .wbtn:active { transform: scale(.94); }
 .wbtn.close:hover { background: linear-gradient(180deg, #c0483a, #7d231b); }

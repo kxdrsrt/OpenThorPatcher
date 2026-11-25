@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use otp_core::launch;
-use otp_core::patchlist::{ChangeEntry, ClientCfg, LinkItem, NewsItem, PatchList};
+use otp_core::patchlist::{ChangeEntry, ClientCfg, LinkItem, NewsItem, PatchList, ServerEntry};
 use otp_core::sync::{self, Config, Event, Summary};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
@@ -41,6 +41,15 @@ struct Cfg {
     /// For classic servers without a patch list.
     #[serde(default)]
     website: Option<String>,
+    /// Headers for a private patch host, e.g. {"Authorization": "Bearer <read-only token>"}. Anyone who has the patcher can read
+    /// them, so use a read-only token limited to the patch repository.
+    #[serde(default)]
+    headers: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    header_hosts: Vec<String>,
+    /// For classic servers without a patch list: what to show as server status.
+    #[serde(default)]
+    servers: Vec<ServerEntry>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default)]
@@ -111,6 +120,8 @@ fn core_config(app: &tauri::AppHandle, cfg: &Cfg, st: &App) -> Config {
         c.legacy_default_grf = g.clone();
     }
     c.cancel = Some(st.cancel.clone());
+    c.headers = cfg.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    c.header_hosts = cfg.header_hosts.clone();
     c
 }
 
@@ -214,6 +225,40 @@ async fn check(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
         };
         *st.last.lock().map_err(err)? = l;
         Ok(out)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[derive(Serialize)]
+struct ServerState {
+    name: String,
+    ok: bool,
+    ms: u64,
+}
+
+/// Is the server reachable? A TCP connect with a short timeout, all servers in parallel.
+#[tauri::command]
+async fn server_status(st: State<'_, Arc<App>>) -> Res<Vec<ServerState>> {
+    let cfg = load_cfg()?;
+    let list: Vec<ServerEntry> = st.last.lock().map_err(err)?.as_ref().map(|l| l.servers.clone()).filter(|s| !s.is_empty()).unwrap_or(cfg.servers);
+    tauri::async_runtime::spawn_blocking(move || {
+        let handles: Vec<_> = list
+            .into_iter()
+            .map(|s| {
+                std::thread::spawn(move || {
+                    use std::net::ToSocketAddrs;
+                    let t = std::time::Instant::now();
+                    let ok = (s.host.as_str(), s.port)
+                        .to_socket_addrs()
+                        .ok()
+                        .and_then(|mut a| a.next())
+                        .is_some_and(|addr| std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(2500)).is_ok());
+                    ServerState { name: s.name, ok, ms: t.elapsed().as_millis() as u64 }
+                })
+            })
+            .collect();
+        Ok(handles.into_iter().filter_map(|h| h.join().ok()).collect())
     })
     .await
     .map_err(err)?
@@ -411,7 +456,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
-        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url])
+        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url, server_status])
         .run(tauri::generate_context!())
         .expect("error while running OpenThor Patcher");
 }

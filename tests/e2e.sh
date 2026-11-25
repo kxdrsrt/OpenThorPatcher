@@ -139,4 +139,49 @@ cp "$S/files/a.cfg" "$U/share-a"
 "$OTP" patch --url "file://$S" --client "$P" > /dev/null || fail "cloud patch"
 cmp "$M/a.cfg" "$P/a.cfg" || fail "cloud file differs"
 ok "cloud style: full links per file, no mirror"
+
+# ---- private host: the site is served only with a token header (GitHub/GitLab private repositories work the same way) --
+D="$W/auth"; M="$D/m"; S="$D/site"; P="$D/p"; mkdir -p "$M" "$P" "$S"
+PORT=$((20000 + $$ % 20000))
+echo secret-cfg > "$M/a.cfg"
+cat > "$D/project.json" <<EOF
+{"server":"PrivRO","client":"$M","site":"$S","base_urls":["http://127.0.0.1:$PORT"],"sync":["a.cfg"]}
+EOF
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "auth publish"
+cat > "$D/srv.py" <<'EOF'
+import http.server, sys, os
+os.chdir(sys.argv[2])
+class H(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.headers.get("Authorization") != "Bearer s3cret":
+            self.send_response(401); self.end_headers(); return
+        super().do_GET()
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+EOF
+python3 "$D/srv.py" "$PORT" "$S" & SRV=$!
+sleep 1
+if "$OTP" patch --url "http://127.0.0.1:$PORT" --client "$P" > "$D/p0.log" 2>&1; then kill $SRV; fail "private host answered without a token"; fi
+grep -q "access denied" "$D/p0.log" || { kill $SRV; cat "$D/p0.log"; fail "no clear message for a missing token"; }
+"$OTP" patch --url "http://127.0.0.1:$PORT" --client "$P" --header "Authorization: Bearer s3cret" > "$D/p1.log" 2>&1 || { kill $SRV; cat "$D/p1.log"; fail "patch with token"; }
+kill $SRV
+cmp "$M/a.cfg" "$P/a.cfg" || fail "private host file differs"
+ok "private host: refused without the token with a clear message, works with it"
+
+# ---- git hosting: publish commits and pushes the site into a (bare) repository ---------------------------------------
+D="$W/git"; M="$D/m"; S="$D/site"; mkdir -p "$M" "$D"
+git init -q --bare "$D/remote.git" 2>/dev/null
+git clone -q "$D/remote.git" "$S" 2>/dev/null
+( cd "$S" && git config user.email t@example.org && git config user.name t && git checkout -q -b main 2>/dev/null; true )
+echo g1 > "$M/a.cfg"
+cat > "$D/project.json" <<EOF
+{"server":"GitRO","client":"$M","site":"$S","base_urls":["gh:me/patches@main"],"sync":["a.cfg"],"git_push":true}
+EOF
+"$OTP" publish --project "$D/project.json" > "$D/pub.log" 2>&1 || { cat "$D/pub.log"; fail "git publish"; }
+( cd "$S" && git push -q -u origin main 2>/dev/null; true )
+echo g2 > "$M/a.cfg"; "$OTP" publish --project "$D/project.json" > "$D/pub2.log" 2>&1 || { cat "$D/pub2.log"; fail "git publish 2"; }
+[ "$(git --git-dir="$D/remote.git" log --oneline main 2>/dev/null | wc -l)" -ge 2 ] || { cat "$D/pub2.log"; fail "git commits missing in the remote"; }
+git --git-dir="$D/remote.git" show main:patchlist.json | grep -q GitRO || fail "patchlist not in the remote"
+git --git-dir="$D/remote.git" ls-tree -r main --name-only | grep -q "^state/" && fail "state/ was pushed"
+ok "git hosting: publish commits and pushes the site, state/ stays local"
 echo "ALL OK"

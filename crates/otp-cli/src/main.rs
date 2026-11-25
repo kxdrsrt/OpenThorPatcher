@@ -75,6 +75,12 @@ enum Cmd {
         /// Re-hash every file instead of trusting the cache (repair)
         #[arg(long)]
         check: bool,
+        /// Request header for a private host, `"Authorization: Bearer <token>"`, repeatable
+        #[arg(long = "header")]
+        header: Vec<String>,
+        /// Host that gets the headers (default: the host of --url)
+        #[arg(long = "header-host")]
+        header_host: Vec<String>,
         /// GRF a classic Thor patch without a target goes to
         #[arg(long, default_value = "data.grf")]
         legacy_grf: String,
@@ -161,12 +167,17 @@ fn real() -> otp_core::Result<()> {
                 );
             }
         }
-        Cmd::Patch { url, client, pub_key, grf_password, keep_backup, dry_run, check, legacy_grf } => {
+        Cmd::Patch { url, client, pub_key, grf_password, keep_backup, dry_run, check, header, header_host, legacy_grf } => {
             let mut cfg = Config::new(url, client);
             for s in grf_password {
                 let (n, p) = s.split_once('=').ok_or_else(|| otp_core::msg("--grf-password needs name=password"))?;
                 cfg.grf_passwords.insert(n.to_string(), p.to_string());
             }
+            for h in header {
+                let (k, v) = h.split_once(':').ok_or_else(|| otp_core::msg("--header needs \"Name: value\""))?;
+                cfg.headers.push((k.trim().to_string(), v.trim().to_string()));
+            }
+            cfg.header_hosts = header_host;
             cfg.pub_key = pub_key;
             cfg.backup = keep_backup;
             cfg.dry_run = dry_run;

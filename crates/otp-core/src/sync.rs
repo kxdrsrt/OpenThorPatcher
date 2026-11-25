@@ -34,6 +34,11 @@ pub struct Config {
     /// GRF a legacy Thor patch without a target goes to.
     pub legacy_default_grf: String,
     pub cancel: Option<Arc<AtomicBool>>,
+    /// Headers for a private host (`Authorization: Bearer <token>`, `PRIVATE-TOKEN: <token>`).
+    pub headers: Vec<(String, String)>,
+    /// Hosts that get them; default: the host of `patch_url` / `list_url`. A token is never sent anywhere else, also not
+    /// to the target of a redirect.
+    pub header_hosts: Vec<String>,
 }
 
 impl Config {
@@ -51,7 +56,22 @@ impl Config {
             force_check: false,
             legacy_default_grf: "data.grf".into(),
             cancel: None,
+            headers: vec![],
+            header_hosts: vec![],
         }
+    }
+
+    fn apply_auth(&self) {
+        let mut hosts = self.header_hosts.clone();
+        if hosts.is_empty() {
+            for u in std::iter::once(&self.patch_url).chain(self.list_url.iter()) {
+                let h = crate::fetch::host_of(&crate::providers::resolve(u));
+                if !h.is_empty() && !hosts.contains(&h) {
+                    hosts.push(h);
+                }
+            }
+        }
+        crate::fetch::set_auth(crate::fetch::Auth { headers: self.headers.clone(), hosts });
     }
 
     fn cancelled(&self) -> bool {
@@ -170,6 +190,7 @@ pub fn save_prefs(dir: &Path, p: &Prefs) -> Result<()> {
 }
 
 pub fn fetch_list(cfg: &Config) -> Result<PatchList> {
+    cfg.apply_auth();
     let list_url = cfg.list_url.clone().unwrap_or_else(|| join(&cfg.patch_url, "patchlist.json"));
     let bytes = get_bytes(&list_url)?;
     if cfg.pub_key.is_some() || cfg.pub_key_hex.is_some() {

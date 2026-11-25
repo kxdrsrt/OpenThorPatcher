@@ -35,6 +35,8 @@ pub struct PublishReport {
     pub files_updated: Vec<String>,
     pub baselines: Vec<String>,
     pub plan: Vec<PlanItem>,
+    /// What `git push` said, when the project pushes.
+    pub git: Option<String>,
 }
 
 fn open(path: &Path, key: Option<&Key>) -> Result<Archive> {
@@ -144,6 +146,7 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     list.remove = p.remove.iter().map(|r| norm(r)).collect();
     list.client = p.game.clone();
     list.data_ini = p.data_ini.clone();
+    list.servers = p.servers.clone();
     list.website = p.website.clone();
     list.links = p.links.clone();
     list.news = p.news.clone();
@@ -312,7 +315,38 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     } else {
         log("warning: no signing key, the patch list is not signed");
     }
+    if p.git_push {
+        let msg = format!("Publish {}", list.updated);
+        rep.git = Some(git_publish(&p.site, &msg, log)?);
+    }
     Ok(rep)
+}
+
+fn git(site: &Path, args: &[&str]) -> Result<String> {
+    let o = std::process::Command::new("git").arg("-C").arg(site).args(args).output().map_err(|e| msg(format!("git could not be started: {e}")))?;
+    let out = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    if o.status.success() {
+        Ok(out.trim().to_string())
+    } else {
+        Err(msg(format!("git {} failed: {}", args.join(" "), out.trim())))
+    }
+}
+
+/// `git add -A`, commit, push in the site folder. `state/` (publisher bookkeeping) is kept out of the repository.
+pub fn git_publish(site: &Path, message: &str, log: &mut dyn FnMut(&str)) -> Result<String> {
+    git(site, &["rev-parse", "--is-inside-work-tree"]).map_err(|_| msg(format!("{} is not a git working tree: run `git init` / `git clone` there first", site.display())))?;
+    let ignore = site.join(".gitignore");
+    let cur = std::fs::read_to_string(&ignore).unwrap_or_default();
+    if !cur.lines().any(|l| l.trim() == "state/") {
+        std::fs::write(&ignore, format!("{cur}{}state/\n", if cur.is_empty() || cur.ends_with('\n') { "" } else { "\n" })).map_err(|e| io_err(&ignore, e))?;
+    }
+    git(site, &["add", "-A"])?;
+    if git(site, &["status", "--porcelain"])?.is_empty() {
+        return Ok("nothing to commit".into());
+    }
+    git(site, &["commit", "-m", message])?;
+    log("git: committed, pushing ...");
+    git(site, &["push"])
 }
 
 fn publish_full(p: &Project, list: &mut PatchList, name: &str, src: &Path) -> Result<()> {

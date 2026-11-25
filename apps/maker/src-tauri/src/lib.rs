@@ -133,7 +133,7 @@ fn site_status(project: Project) -> SiteStatus {
 
 /// The `patcher.json` a player's OpenThor Patcher needs next to its executable.
 #[tauri::command]
-fn patcher_config(project: Project, pub_hex: String, list_url: Option<String>) -> Res<String> {
+fn patcher_config(project: Project, pub_hex: String, list_url: Option<String>, header_name: Option<String>, header_value: Option<String>) -> Res<String> {
     let base = project.base_urls.first().cloned().unwrap_or_default();
     let mut v = serde_json::json!({
         "name": project.server,
@@ -142,6 +142,9 @@ fn patcher_config(project: Project, pub_hex: String, list_url: Option<String>) -
     });
     if let Some(u) = list_url.filter(|u| !u.is_empty()) {
         v["list_url"] = serde_json::Value::String(u);
+    }
+    if let (Some(n), Some(val)) = (header_name.filter(|n| !n.is_empty()), header_value.filter(|n| !n.is_empty())) {
+        v["headers"] = serde_json::json!({ n: val });
     }
     serde_json::to_string_pretty(&v).map_err(err)
 }

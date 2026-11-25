@@ -1,6 +1,6 @@
 //! The operator's project file (`otp-project.json`): everything `otp publish` and the Patch Maker need.
 
-use crate::patchlist::{ChangeEntry, ClientCfg, DataIniCfg, LinkItem, NewsItem};
+use crate::patchlist::{ChangeEntry, ClientCfg, DataIniCfg, LinkItem, NewsItem, ServerEntry};
 use crate::{io_err, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -51,6 +51,12 @@ pub struct Project {
     pub allow_patching: bool,
     #[serde(default)]
     pub message: String,
+    /// After publishing, commit and push the site folder (it must be a git working tree, for a GitHub/GitLab patch repository).
+    /// Your own git login does the pushing, so a private repository needs no token here.
+    #[serde(default)]
+    pub git_push: bool,
+    #[serde(default)]
+    pub servers: Vec<ServerEntry>,
     #[serde(default)]
     pub website: String,
     #[serde(default)]
@@ -80,6 +86,8 @@ impl Project {
             url_map: BTreeMap::new(),
             allow_patching: true,
             message: String::new(),
+            git_push: false,
+            servers: vec![],
             website: String::new(),
             links: vec![],
             news: vec![],

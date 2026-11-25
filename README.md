@@ -53,10 +53,11 @@ swapped in; the old file is **replaced completely**, a `.bak` only stays with `-
   linked into the program; players do **not** install anything).
 - **Still `.thor`:** reads every Thor patch and the classic `plist.txt` server layout, so an existing patch server works
   unchanged (merge patches and loose-file patches).
-- **Hosting freedom:** static host, S3/R2, GitHub Releases, or Google Drive / Dropbox / OneDrive share links.
+- **Hosting freedom:** static host, S3/R2, GitHub Releases, **GitHub / GitLab repositories** (`gh:owner/repo@main`, `gl:group/project@main`, private ones with a read-only token), or Google Drive / Dropbox / OneDrive share links. See [docs/HOSTING.md](docs/HOSTING.md).
+- **Player window:** Website button, link buttons with icons (Discord, forum, GitHub …), login/char/map server status dots, a big Play button and **RO Setup**.
 - **Themes, news and changelog:** the player window is a themeable folder (default: a Ragnarok-style night-blue theme with the logo sticking out of the window); news and changelog are written in the Patch Maker and travel in the signed patch list.
 - **Optional packs** (for example OdinGuard's competitive pack) with a per-player switch that survives patching.
-- **Scriptable and AI-ready:** CLI with `--json`, MCP server.
+- **Scriptable and AI-ready:** CLI with `--json`, and the `otp-mcp` MCP server (10 tools: create the project, preview, publish, write news, set servers and links) so an assistant can run your patch site; see [docs/MCP.md](docs/MCP.md).
 
 ## Quick start (operator)
 

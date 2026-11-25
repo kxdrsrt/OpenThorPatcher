@@ -26,7 +26,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
       case "scan": return [{ path: "data.grf", size: 2.5e9, suggest: "thor" }, { path: "odin.grf", size: 3e6, suggest: "sync" }, { path: "ragexe.exe", size: 8e6, suggest: "sync" }];
       case "site_status": return { published: true, server: "TestRO", updated: "2026-11-25T00:00:00Z", patches: 3, files: 2, targets: 1, signed: true };
       case "read_pub": return "ab".repeat(32);
-      case "patcher_config": return JSON.stringify({ name: a.project.server, pub_key: a.pubHex });
+      case "patcher_config": return JSON.stringify({ name: a.project.server, pub_key: a.pubHex, h: a.headerName });
       case "files_to_upload": return [{ rel: "files/odin.grf", size: 3e6, url: "" }, { rel: "patches/0001-data.thor", size: 1000, url: "" }, { rel: "patchlist.json", size: 10, url: "" }];
       case "export_theme": return "/x/patcher-theme";
       case "plan": return { dry_run: true, plan: [{ kind: "patch", name: "patches/0002-data.thor", detail: "1 new", size: 99 }, { kind: "remove", name: "old.dll", detail: "x", size: 0 }], patches_added: [], files_updated: [] };
@@ -54,6 +54,9 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   ok(d.querySelectorAll("#remove-list .item").length === 2, "maker: removal added");
   d.querySelector("nav button[data-tab=players]").click(); await sleep(30);
   ok(d.querySelectorAll("#order-list .item").length === 2 && d.querySelectorAll("#packs tbody tr").length === 1, "maker: DATA.INI order and packs");
+  d.querySelector("nav button[data-tab=players]").click(); await sleep(30);
+  d.getElementById("btn-server-std").click();
+  ok(d.querySelectorAll("#servers-list .item").length === 3, "maker: login/char/map servers");
   d.querySelector("nav button[data-tab=news]").click(); await sleep(30);
   d.getElementById("btn-link-add").click();
   ok(d.querySelectorAll("#links-list .item").length === 1, "maker: link added");
@@ -74,6 +77,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
     core: { invoke: async (c, a) => { switch (c) {
       case "init": return { name: "TestRO", client_dir: "/c", auto_update: false, keep_backup: true, error: null, version: "0.1.0" };
       case "get_theme": return null;
+      case "server_status": return [{ name: "Login", ok: true, ms: 12 }, { name: "Char", ok: true, ms: 15 }, { name: "Map", ok: false, ms: 2500 }];
       case "open_url": w.opened = (w.opened || []).concat(a.url); return null;
       case "check": return Object.assign({ server: "TestRO", notice: "Welcome!", news: [{ date: "2026-11-25", title: "Hello <b>", body: "Para one\n\n- item **bold**\n- [link](https://x.y/z)" }], changelog: [{ date: "2026-11-25", version: "Patch 3", title: "T", items: ["one", "two"] }], website: "https://burning.example", links: [{ title: "Discord", url: "https://discord.gg/x" }, { title: "bad", url: "javascript:alert(1)" }], news_url: "", open: true, message: "", packs: [{ id: "comp", title: "Competitive", on: true, locked: false }], can_play: true, can_setup: true, summary }, extra);
       case "patch": return summary;
@@ -88,6 +92,9 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   ok(d.querySelectorAll("#p-news li").length === 2 && d.querySelector("#p-news strong") && d.querySelector("#p-news a").href.startsWith("https://x.y"), "patcher: news markup");
   ok(d.querySelectorAll("#p-changelog .change-entry li").length === 2, "patcher: changelog");
   ok(!d.getElementById("btn-web").hidden, "patcher: website button");
+  ok(d.querySelectorAll("#srv .srv-item").length === 3 && d.querySelectorAll("#srv .srv-item.bad").length === 1, "patcher: server status dots");
+  ok(d.querySelector("#foot-links a use").getAttribute("href") === "#b-discord", "patcher: Discord link icon");
+  ok(d.getElementById("btn-setup").textContent.includes("RO Setup"), "patcher: RO Setup label");
   d.getElementById("btn-web").click(); await sleep(20);
   ok(d.querySelectorAll("#foot-links a").length === 1, "patcher: footer links (non-http dropped)");
   d.querySelector("#p-news a").click(); await sleep(20);

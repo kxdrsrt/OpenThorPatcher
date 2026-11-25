@@ -38,6 +38,7 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   ],
   "website": "https://burning.example",
   "links": [{ "title": "Discord", "url": "https://discord.gg/x" }],
+  "servers": [{ "name": "Login", "host": "play.burning.example", "port": 6900 }, { "name": "Char", "host": "play.burning.example", "port": 6121 }, { "name": "Map", "host": "play.burning.example", "port": 5121 }],
   "remove": ["old.dll", "oldfolder/*"],
   "news": [{ "date": "2026-11-25", "title": "Welcome", "body": "The **test server** is open.\n\n- 75x base" }],
   "changelog": [{ "date": "2026-11-25", "version": "Patch 12", "title": "LGP colours", "items": ["Magnus tiles are red"] }],
@@ -57,7 +58,7 @@ mirror in `base_url` that has it; a full link (`https://…`, `gdrive:ID`, a sha
 [HOSTING.md](HOSTING.md). `remove` paths (relative, no `..`; `dir/*` = folder) are deleted from every client; entries
 inside GRFs are removed by Thor delete directives. `client` says what the Play and Setup buttons start. `data_ini`
 gives the GRF load order; `@pack:<id>` is replaced by the pack's file only when the player switched the pack on (or
-`locked`), and GRFs the player added stay after the managed ones. `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)).
+`locked`), and GRFs the player added stay after the managed ones. `servers` are TCP-checked by the player app every 30 s (green/red dot, 2.5 s timeout); `website` and `links` become the Website pill and the icon buttons (icon chosen by host name; only http/https are opened). `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)).
 Unknown fields are ignored, so lists can grow without a new schema number.
 
 Not in schema 1 yet: an `odinguard` hook (manifest check after patching).

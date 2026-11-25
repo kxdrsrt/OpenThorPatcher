@@ -124,6 +124,10 @@
           <label class="fld wide"><span>News page (shown inside the patcher)</span><input id="n-url" placeholder="https://example.com/news"></label>
           <label class="fld wide"><span>Short notice (shown when there is no news page)</span><input id="n-notice"></label>
         </div>
+        <h3>Server status</h3>
+        <p class="note" style="margin:0 0 10px">Shown at the top left of the patcher as one dot per server (a TCP connect every 30 s).</p>
+        <div id="servers-list" class="list"></div>
+        <div class="inline-add"><button id="btn-server-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add server</button><button id="btn-server-std" class="btn">Login / char / map</button></div>
         <h3>DATA.INI</h3>
         <p class="note" style="margin:0 0 10px">The patcher writes the GRF load order. Put <code>@pack:&lt;id&gt;</code> where an optional pack goes; it is replaced by the pack's file only when the player has the pack switched on. GRFs players added themselves stay after yours.</p>
         <div class="card"><div id="order-list" class="list"></div>
@@ -169,10 +173,17 @@
         <div class="warnbox" id="cloud-warn"><b>Cloud drives are the fragile option.</b> Large files can hit download quotas or return a web page instead of the file; the patcher then stops with a clear message. Use them for small communities, and prefer a static host for anything big. Links are converted to direct downloads automatically.</div>
         <div class="row"><button id="btn-refresh-files" class="btn"><svg class="ic"><use href="#i-scan"/></svg>Refresh file list</button><span class="muted" id="links-summary"></span></div>
         <div class="table-wrap"><table id="links"></table></div>
+        <h3>Git hosting</h3>
+        <div class="card form">
+          <label class="switch-row"><span>Commit and push the site after publishing<small>the site folder must be a git working tree (your own git login pushes, so a private repository needs no token here); use <code>gh:owner/repo@main</code> or <code>gl:group/project@main</code> as the mirror</small></span><span class="switch"><input type="checkbox" id="f-git"><i></i></span></label>
+        </div>
         <h3>Player config</h3>
         <p class="note" style="margin:0 0 10px">Ship this next to the player's OpenThor Patcher (<code>patcher.json</code>). It carries your public key.</p>
         <div class="card form">
           <label class="fld wide"><span>Patch list link (only if the list itself is a cloud share link)</span><input id="list-url" placeholder="optional"></label>
+          <label class="fld"><span>Private host: header name</span><input id="hdr-name" placeholder="Authorization"></label>
+          <label class="fld"><span>Header value (a read-only token)</span><input id="hdr-val" placeholder="Bearer github_pat_…"></label>
+          <p class="note wide" style="margin:0">A token in <code>patcher.json</code> can be read by every player. Use a read-only token limited to the patch repository, or serve a private repository through a proxy that holds the token.</p>
           <div class="row wide"><button id="btn-cfg-save" class="btn"><svg class="ic"><use href="#i-save"/></svg>Save patcher.json…</button><button id="btn-cfg-copy" class="btn"><svg class="ic"><use href="#i-copy"/></svg>Copy</button></div>
           <pre id="cfg-out" class="out wide"></pre>
         </div>

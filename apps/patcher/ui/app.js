@@ -44,6 +44,23 @@ function renderChangelog(c) {
   root.innerHTML = items.map((e) => `<article class="change-entry"><div>${e.version ? `<span class="ver">${esc(e.version)}</span>` : ""}<time>${esc(e.date)}</time></div>${e.title ? `<h4>${esc(e.title)}</h4>` : ""}<ul>${(e.items || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></article>`).join("");
 }
 
+/* Server status at the top left: one dot per server (login, char, map), refreshed every 30 s. */
+async function refreshServers() {
+  const root = $("#srv");
+  let list = [];
+  try { list = await invoke("server_status"); } catch { list = []; }
+  root.hidden = !list.length;
+  root.innerHTML = "";
+  for (const s of list) {
+    const e = document.createElement("span");
+    e.className = "srv-item " + (s.ok ? "ok" : "bad");
+    e.title = s.ok ? `${s.name}: online (${s.ms} ms)` : `${s.name}: not reachable`;
+    e.innerHTML = '<i class="dot"></i><b></b>';
+    e.querySelector("b").textContent = s.name;
+    root.appendChild(e);
+  }
+}
+
 function setTab(name) {
   document.querySelectorAll("#tabs button").forEach((b) => { const on = b.dataset.tab === name; b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false"); });
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.id === "p-" + name));
@@ -51,13 +68,22 @@ function setTab(name) {
 
 const openUrl = (u) => invoke("open_url", { url: u }).catch((e) => toast(String(e), "bad"));
 
+const ICONS = [[/discord\./, "discord"], [/github\./, "github"], [/gitlab\./, "gitlab"], [/youtu(\.be|be\.)/, "youtube"], [/(^|\.)(x|twitter)\.com/, "x"], [/facebook\.|fb\.com/, "facebook"], [/reddit\./, "reddit"], [/twitch\./, "twitch"], [/(^|\.)t\.me|telegram\./, "telegram"], [/instagram\./, "instagram"], [/tiktok\./, "tiktok"]];
+function iconFor(l) {
+  let host = "";
+  try { host = new URL(l.url).hostname.toLowerCase(); } catch { /* not a URL */ }
+  for (const [re, id] of ICONS) if (re.test(host)) return id;
+  return /forum|board|community|foro/i.test(l.title + " " + l.url) ? "forum" : "link";
+}
+
 function renderLinks(c) {
   const root = $("#foot-links");
   root.innerHTML = "";
   for (const l of (c?.links || [])) {
     if (!/^https?:\/\//.test(l.url)) continue;
     const a = document.createElement("a");
-    a.textContent = l.title || l.url;
+    a.innerHTML = `<svg class="ic" aria-hidden="true"><use href="#b-${iconFor(l)}"/></svg><span></span>`;
+    a.querySelector("span").textContent = l.title || l.url;
     a.title = l.url;
     a.tabIndex = 0;
     a.onclick = () => openUrl(l.url);
@@ -168,6 +194,7 @@ async function check(force = false) {
   else state("warn", "Updates available", need(checked.summary), "update");
   buttons();
   renderPacks();
+  refreshServers();
   return checked;
 }
 
@@ -257,6 +284,8 @@ document.addEventListener("click", (e) => {
 $("#btn-play").onclick = () => invoke("play").then(() => toast("Starting the game…")).catch((e) => toast(String(e), "bad"));
 $("#btn-setup").onclick = () => invoke("setup").catch((e) => toast(String(e), "bad"));
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+setInterval(() => { if (!patching) refreshServers(); }, 30000);
 
 (async () => {
   await T.event.listen("progress", (ev) => {

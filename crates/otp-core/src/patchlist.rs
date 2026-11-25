@@ -48,6 +48,9 @@ pub struct PatchList {
     /// The server's website: the patcher's *Website* button opens it in the player's browser.
     #[serde(default)]
     pub website: String,
+    /// Servers whose reachability the patcher shows at the top left (login, char, map).
+    #[serde(default)]
+    pub servers: Vec<ServerEntry>,
     /// More links (Discord, forum, vote ...), shown at the bottom of the patcher window.
     #[serde(default)]
     pub links: Vec<LinkItem>,
@@ -57,6 +60,13 @@ pub struct PatchList {
     /// Changelog shown in the patcher's Changelog tab (newest first).
     #[serde(default)]
     pub changelog: Vec<ChangeEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ServerEntry {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

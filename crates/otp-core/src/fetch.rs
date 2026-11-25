@@ -6,12 +6,66 @@ use crate::{io_err, msg, sha256_file, Error, Result};
 use std::io::{Read, Write};
 use std::path::Path;
 
+use std::sync::Mutex;
+
+/// Request headers for private hosts (a GitHub/GitLab token, basic auth of a proxy), sent only to the listed hosts.
+#[derive(Clone, Default)]
+pub struct Auth {
+    pub headers: Vec<(String, String)>,
+    pub hosts: Vec<String>,
+}
+
+static AUTH: Mutex<Option<Auth>> = Mutex::new(None);
+
+pub fn set_auth(a: Auth) {
+    if let Ok(mut g) = AUTH.lock() {
+        *g = Some(a);
+    }
+}
+
+pub fn host_of(url: &str) -> String {
+    url.split("://").nth(1).unwrap_or("").split(['/', '?', '#']).next().unwrap_or("").rsplit('@').next().unwrap_or("").split(':').next().unwrap_or("").to_ascii_lowercase()
+}
+
+fn auth_for(url: &str) -> Vec<(String, String)> {
+    let host = host_of(url);
+    match AUTH.lock().ok().and_then(|g| g.clone()) {
+        Some(a) if a.hosts.iter().any(|h| h.eq_ignore_ascii_case(&host)) => a.headers,
+        _ => vec![],
+    }
+}
+
 fn client() -> Result<reqwest::blocking::Client> {
+    // redirects are followed by hand so a token is never sent to the host a redirect points to
     Ok(reqwest::blocking::Client::builder()
         .user_agent(concat!("OpenThor-Patcher/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(std::time::Duration::from_secs(15))
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(None)
         .build()?)
+}
+
+/// GET with the configured headers for the host, following up to 6 redirects (headers only for hosts that are listed).
+fn send(url: &str, range_from: Option<u64>) -> Result<reqwest::blocking::Response> {
+    let c = client()?;
+    let mut cur = url.to_string();
+    for _ in 0..7 {
+        let mut req = c.get(&cur);
+        for (k, v) in auth_for(&cur) {
+            req = req.header(k, v);
+        }
+        if let Some(n) = range_from {
+            req = req.header("Range", format!("bytes={n}-"));
+        }
+        let r = req.send()?;
+        if r.status().is_redirection() {
+            let Some(loc) = r.headers().get(reqwest::header::LOCATION).and_then(|v| v.to_str().ok()) else { return Ok(r) };
+            cur = if loc.starts_with("http") { loc.to_string() } else { format!("{}://{}{}", cur.split("://").next().unwrap_or("https"), host_of(&cur), loc) };
+            continue;
+        }
+        return Ok(r);
+    }
+    Err(msg(format!("{url}: too many redirects")))
 }
 
 pub fn join(base: &str, rel: &str) -> String {
@@ -35,6 +89,8 @@ fn is_html(resp: &reqwest::blocking::Response) -> bool {
 fn status_err(url: &str, st: reqwest::StatusCode) -> Error {
     if st.as_u16() == 404 {
         Error::NotFound(url.to_string())
+    } else if st.as_u16() == 401 || st.as_u16() == 403 {
+        msg(format!("{url}: HTTP {st}: access denied (missing or wrong token for a private host?)"))
     } else {
         msg(format!("{url}: HTTP {st}"))
     }
@@ -53,7 +109,7 @@ pub fn get_bytes(url: &str) -> Result<Vec<u8>> {
         return std::fs::read(&p).map_err(|e| missing(&p, e));
     }
     let real = resolve(url);
-    let r = client()?.get(&real).send()?;
+    let r = send(&real, None)?;
     if !r.status().is_success() {
         return Err(status_err(url, r.status()));
     }
@@ -80,11 +136,7 @@ pub fn download(url: &str, dest: &Path, size: u64, sha256: &str, progress: &mut 
         let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
         let have = if size > 0 && have > size { 0 } else { have };
         let real = resolve(url);
-        let mut req = client()?.get(&real);
-        if have > 0 {
-            req = req.header("Range", format!("bytes={have}-"));
-        }
-        let mut resp = req.send()?;
+        let mut resp = send(&real, if have > 0 { Some(have) } else { None })?;
         let resumed = resp.status().as_u16() == 206;
         if resp.status().as_u16() == 416 {
             // the partial file is already complete (or wrong): start over once

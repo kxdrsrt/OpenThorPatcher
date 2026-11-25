@@ -151,6 +151,7 @@ function renderPlayers() {
   bind("#m-msg", () => project.message, (v) => (project.message = v));
   renderOrder();
   renderPacks();
+  renderServers();
 }
 
 function renderOrder() {
@@ -230,6 +231,20 @@ function moveItem(arr, i, act, redraw) {
   touch(); redraw();
 }
 
+function renderServers() {
+  const root = $("#servers-list");
+  root.innerHTML = "";
+  if (!project.servers.length) root.appendChild(el("div", "note", "No servers: the patcher shows no status."));
+  project.servers.forEach((s, i) => {
+    const row = el("div", "item", `<input value="${esc(s.name)}" size="10" placeholder="Login" aria-label="Name"><input value="${esc(s.host)}" placeholder="play.example.com" style="flex:1" aria-label="Host"><input type="number" value="${s.port}" style="width:90px" aria-label="Port">`);
+    const [n, h, p] = row.querySelectorAll("input");
+    n.oninput = () => { s.name = n.value; touch(); }; h.oninput = () => { s.host = h.value; touch(); }; p.oninput = () => { s.port = Number(p.value); touch(); };
+    const b = el("button", "btn icon small danger", icon("trash")); b.title = "Remove"; b.setAttribute("aria-label", "Remove server");
+    b.onclick = () => { project.servers.splice(i, 1); touch(); renderServers(); };
+    row.appendChild(b); root.appendChild(row);
+  });
+}
+
 function renderMirrors() {
   list("#mirror-list", project.base_urls, "No mirror yet: add one, or give every file a cloud link below.", (i) => { project.base_urls.splice(i, 1); renderMirrors(); renderConfig(); });
 }
@@ -257,7 +272,7 @@ function linksSummary() {
 async function renderConfig() {
   if (!project) return;
   try {
-    $("#cfg-out").textContent = await invoke("patcher_config", { project, pubHex: pubHex || "", listUrl: $("#list-url").value || null });
+    $("#cfg-out").textContent = await invoke("patcher_config", { project, pubHex: pubHex || "", listUrl: $("#list-url").value || null, headerName: $("#hdr-name").value || null, headerValue: $("#hdr-val").value || null });
   } catch (e) { $("#cfg-out").textContent = String(e); }
 }
 
@@ -270,7 +285,7 @@ function setTab(name) {
   $("#main").scrollTop = 0;
   if (!project) return;
   if (name === "files") renderFiles();
-  if (name === "hosting") { renderMirrors(); renderLinks(); renderConfig(); }
+  if (name === "hosting") { bind("#f-git", () => project.git_push, (v) => (project.git_push = v)); renderMirrors(); renderLinks(); renderConfig(); }
   if (name === "players") renderPlayers();
   if (name === "remove") renderRemove();
   if (name === "news") renderNewsPage();
@@ -290,6 +305,7 @@ async function openProject(p) {
   project.url_map = project.url_map || {};
   project.news = project.news || [];
   project.links = project.links || [];
+  project.servers = project.servers || [];
   project.changelog = project.changelog || [];
   path = p;
   render();
@@ -320,6 +336,7 @@ async function newProject() {
     project.url_map = project.url_map || {};
     project.news = project.news || [];
   project.links = project.links || [];
+  project.servers = project.servers || [];
     project.changelog = project.changelog || [];
     path = file;
     tab = "project";
@@ -385,6 +402,14 @@ $("#btn-theme").onclick = async () => {
 $("#btn-mirror-add").onclick = () => { const v = $("#mirror-new").value.trim(); if (v) { project.base_urls.push(v); $("#mirror-new").value = ""; touch(); renderMirrors(); renderConfig(); } };
 $("#mirror-new").onkeydown = (e) => e.key === "Enter" && $("#btn-mirror-add").click();
 $("#list-url").oninput = renderConfig;
+$("#hdr-name").oninput = renderConfig;
+$("#hdr-val").oninput = renderConfig;
+$("#btn-server-add").onclick = () => { project.servers.push({ name: "", host: "", port: 6900 }); touch(); renderServers(); };
+$("#btn-server-std").onclick = () => {
+  const host = (project.servers[0] && project.servers[0].host) || "";
+  project.servers = [{ name: "Login", host, port: 6900 }, { name: "Char", host, port: 6121 }, { name: "Map", host, port: 5121 }];
+  touch(); renderServers();
+};
 $("#btn-cfg-copy").onclick = async () => { await navigator.clipboard.writeText($("#cfg-out").textContent); status("patcher.json copied."); };
 $("#btn-cfg-save").onclick = async () => {
   const p = await T.dialog.save({ defaultPath: "patcher.json", filters: [{ name: "JSON", extensions: ["json"] }] });
