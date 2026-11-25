@@ -81,6 +81,12 @@ enum Cmd {
         /// Host that gets the headers (default: the host of --url)
         #[arg(long = "header-host")]
         header_host: Vec<String>,
+        /// More patch sites with the same layout as --url, repeatable: the newest valid patch list of all sources wins
+        #[arg(long = "fallback-url")]
+        fallback_url: Vec<String>,
+        /// HTTP(S) or SOCKS5 proxy (default: the system settings)
+        #[arg(long)]
+        proxy: Option<String>,
         /// GRF a classic Thor patch without a target goes to
         #[arg(long, default_value = "data.grf")]
         legacy_grf: String,
@@ -167,7 +173,7 @@ fn real() -> otp_core::Result<()> {
                 );
             }
         }
-        Cmd::Patch { url, client, pub_key, grf_password, keep_backup, dry_run, check, header, header_host, legacy_grf } => {
+        Cmd::Patch { url, client, pub_key, grf_password, keep_backup, dry_run, check, header, header_host, fallback_url, proxy, legacy_grf } => {
             let mut cfg = Config::new(url, client);
             for s in grf_password {
                 let (n, p) = s.split_once('=').ok_or_else(|| otp_core::msg("--grf-password needs name=password"))?;
@@ -178,6 +184,8 @@ fn real() -> otp_core::Result<()> {
                 cfg.headers.push((k.trim().to_string(), v.trim().to_string()));
             }
             cfg.header_hosts = header_host;
+            cfg.fallback_urls = fallback_url;
+            cfg.proxy = proxy;
             cfg.pub_key = pub_key;
             cfg.backup = keep_backup;
             cfg.dry_run = dry_run;

@@ -307,7 +307,23 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     if dry_run {
         return Ok(rep);
     }
-    list.updated = utc_now();
+    // the serial (and the time) only move when the list really changed, so a publish without changes keeps every mirror valid
+    let strip = |mut v: serde_json::Value| {
+        if let Some(o) = v.as_object_mut() {
+            o.remove("updated");
+            o.remove("serial");
+        }
+        v
+    };
+    let previous = std::fs::read(&list_path).ok().and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+    let changed = match previous {
+        Some(prev) => strip(prev) != strip(serde_json::to_value(&list)?),
+        None => true,
+    };
+    if changed {
+        list.serial += 1;
+        list.updated = utc_now();
+    }
     let json = serde_json::to_vec_pretty(&list)?;
     write_atomic(&list_path, &json)?;
     if let Some(seed) = &p.signing_seed {

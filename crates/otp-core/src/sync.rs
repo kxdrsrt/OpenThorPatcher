@@ -39,6 +39,12 @@ pub struct Config {
     /// Hosts that get them; default: the host of `patch_url` / `list_url`. A token is never sent anywhere else, also not
     /// to the target of a redirect.
     pub header_hosts: Vec<String>,
+    /// More patch sites with the same layout as `patch_url` (each has its own `patchlist.json`). The patch list is read from
+    /// all of them and the newest valid one wins (`serial`), so one source being down or behind changes nothing. Files are
+    /// still checked by SHA-256, so only the master version is ever accepted.
+    pub fallback_urls: Vec<String>,
+    /// An explicit HTTP(S) or SOCKS5 proxy; without one the system settings apply.
+    pub proxy: Option<String>,
 }
 
 impl Config {
@@ -58,6 +64,8 @@ impl Config {
             cancel: None,
             headers: vec![],
             header_hosts: vec![],
+            fallback_urls: vec![],
+            proxy: None,
         }
     }
 
@@ -72,6 +80,7 @@ impl Config {
             }
         }
         crate::fetch::set_auth(crate::fetch::Auth { headers: self.headers.clone(), hosts });
+        crate::fetch::set_proxy(self.proxy.clone());
     }
 
     fn cancelled(&self) -> bool {
@@ -110,6 +119,9 @@ struct State {
     hashes: BTreeMap<String, Applied>,
     /// last applied id of a legacy Thor Patcher list
     legacy_id: u32,
+    /// `serial` of the newest patch list this client applied; an older list is refused
+    #[serde(default)]
+    list_serial: u64,
 }
 
 /// What the player chose; lives next to the state in `_patch/`.
@@ -189,12 +201,13 @@ pub fn save_prefs(dir: &Path, p: &Prefs) -> Result<()> {
     write_json(&patch_dir(dir).join("prefs.json"), p)
 }
 
-pub fn fetch_list(cfg: &Config) -> Result<PatchList> {
-    cfg.apply_auth();
-    let list_url = cfg.list_url.clone().unwrap_or_else(|| join(&cfg.patch_url, "patchlist.json"));
-    let bytes = get_bytes(&list_url)?;
-    if cfg.pub_key.is_some() || cfg.pub_key_hex.is_some() {
-        let sig_url = cfg.sig_url.clone().unwrap_or_else(|| format!("{list_url}.sig"));
+fn read_list(cfg: &Config, list_url: &str, need_sig: bool) -> Result<PatchList> {
+    let bytes = get_bytes(list_url)?;
+    if need_sig {
+        let sig_url = match (&cfg.sig_url, &cfg.list_url) {
+            (Some(u), Some(l)) if l == list_url => u.clone(),
+            _ => format!("{list_url}.sig"),
+        };
         let sig = get_bytes(&sig_url).map_err(|_| msg("the patch list has no signature but this patcher requires one"))?;
         let sig = String::from_utf8_lossy(&sig).to_string();
         match (&cfg.pub_key_hex, &cfg.pub_key) {
@@ -206,11 +219,84 @@ pub fn fetch_list(cfg: &Config) -> Result<PatchList> {
     PatchList::parse(&bytes)
 }
 
-/// Downloads `rel` (relative to a mirror, or a full link) from the first mirror that has it.
+/// Reads the patch list from every source (`patch_url`/`list_url` and `fallback_urls`), checks the signature, and takes the
+/// valid list with the highest `serial` (the first source wins a tie). A list older than the one this client already
+/// applied is refused: a mirror that is behind must never roll a client back.
+pub fn fetch_list(cfg: &Config) -> Result<PatchList> {
+    cfg.apply_auth();
+    let mut sources: Vec<(String, String)> = Vec::new(); // (list url, site folder or "")
+    match &cfg.list_url {
+        Some(u) => sources.push((u.clone(), String::new())),
+        None => sources.push((join(&cfg.patch_url, "patchlist.json"), cfg.patch_url.clone())),
+    }
+    for u in &cfg.fallback_urls {
+        let key = u.trim_end_matches('/');
+        if !key.is_empty() && !sources.iter().any(|(_, f)| f.trim_end_matches('/') == key) {
+            sources.push((join(u, "patchlist.json"), u.clone()));
+        }
+    }
+    let need_sig = cfg.pub_key.is_some() || cfg.pub_key_hex.is_some();
+    let mut best: Option<PatchList> = None;
+    let mut errors: Vec<(String, Error)> = Vec::new();
+    for (url, folder) in sources {
+        match read_list(cfg, &url, need_sig) {
+            Ok(mut l) => {
+                l.source = folder;
+                if best.as_ref().map_or(true, |b| l.serial > b.serial) {
+                    best = Some(l);
+                }
+            }
+            Err(Error::Cancelled) => return Err(Error::Cancelled),
+            Err(e) => errors.push((url, e)),
+        }
+    }
+    let Some(list) = best else {
+        if errors.len() == 1 || errors.iter().all(|(_, e)| matches!(e, Error::NotFound(_))) {
+            return Err(errors.remove(0).1);
+        }
+        let all: Vec<String> = errors.iter().map(|(u, e)| format!("{u}: {e}")).collect();
+        return Err(msg(format!("no patch source answered with a valid patch list: {}", all.join(" | "))));
+    };
+    let have = load_state(&cfg.client_dir).list_serial;
+    if list.serial < have {
+        return Err(msg(format!(
+            "the newest patch list reachable now has serial {} but this client already applied serial {}: every source is out of date. \
+             Nothing was changed; try again later.",
+            list.serial, have
+        )));
+    }
+    Ok(list)
+}
+
+static DEAD: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+fn norm_base(b: &str) -> String {
+    b.trim_end_matches('/').to_ascii_lowercase()
+}
+
+/// Downloads `rel` (relative to a mirror, or a full link) from the first source that has it. The site the patch list came
+/// from is asked first; a source that does not answer (connection refused, timeout) is skipped for the rest of the run so a
+/// dead one does not cost its timeout again for every file; a file that fails the SHA-256 check is thrown away and the
+/// next source tried.
 fn get(cfg: &Config, list: &PatchList, rel: &str, dest: &Path, size: u64, sha: &str, ev: &mut dyn FnMut(Event)) -> Result<()> {
-    let bases: Vec<String> = if is_absolute(rel) { vec![String::new()] } else { list.base_url.clone() };
+    let mut bases: Vec<String> = if is_absolute(rel) {
+        vec![String::new()]
+    } else {
+        let mut v = list.base_url.clone();
+        if !list.source.is_empty() {
+            v.retain(|b| norm_base(b) != norm_base(&list.source));
+            v.insert(0, list.source.clone());
+        }
+        v
+    };
+    let dead: Vec<String> = DEAD.lock().map(|g| g.clone()).unwrap_or_default();
+    let alive: Vec<String> = bases.iter().filter(|b| !dead.contains(&norm_base(b))).cloned().collect();
+    if !alive.is_empty() {
+        bases = alive;
+    }
     let mut last = msg("the patch list has no mirror");
-    for base in bases {
+    let n = bases.len();
+    for (i, base) in bases.into_iter().enumerate() {
         let name = rel.rsplit('/').next().unwrap_or(rel).to_string();
         let mut f = |done, total| {
             ev(Event::Download { name: name.clone(), done, total });
@@ -218,7 +304,9 @@ fn get(cfg: &Config, list: &PatchList, rel: &str, dest: &Path, size: u64, sha: &
         };
         let url = join(&base, rel);
         // a list fetched over the network must not point the patcher at files on the player's own disk
-        let local_site = cfg.patch_url.starts_with("file://") || cfg.list_url.as_deref().is_some_and(|u| u.starts_with("file://"));
+        let local_site = cfg.patch_url.starts_with("file://")
+            || cfg.list_url.as_deref().is_some_and(|u| u.starts_with("file://"))
+            || cfg.fallback_urls.iter().any(|u| u.starts_with("file://"));
         if url.starts_with("file://") && !local_site {
             last = msg(format!("{url}: the patch list asks for a local file, refused"));
             continue;
@@ -226,7 +314,17 @@ fn get(cfg: &Config, list: &PatchList, rel: &str, dest: &Path, size: u64, sha: &
         match download(&url, dest, size, sha, &mut f) {
             Ok(()) => return Ok(()),
             Err(Error::Cancelled) => return Err(Error::Cancelled),
-            Err(e) => last = e,
+            Err(e) => {
+                if matches!(e, Error::Http(_) | Error::Net(_)) && !base.is_empty() {
+                    if let Ok(mut g) = DEAD.lock() {
+                        g.push(norm_base(&base));
+                    }
+                }
+                if i + 1 < n {
+                    ev(Event::Info(format!("{url}: {e}; trying the next source")));
+                }
+                last = e;
+            }
         }
     }
     Err(last)
@@ -265,6 +363,9 @@ fn remove_paths(cfg: &Config, list: &PatchList, sum: &mut Summary, ev: &mut dyn 
 
 pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
     cfg.check_cancel()?;
+    if let Ok(mut g) = DEAD.lock() {
+        g.clear();
+    }
     let list = match fetch_list(cfg) {
         Ok(l) => l,
         Err(Error::NotFound(_)) => return run_legacy(cfg, ev),
@@ -273,7 +374,14 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
     if !list.allow_patching {
         return Err(msg(if list.message.is_empty() { "patching is closed by the server".to_string() } else { list.message.clone() }));
     }
-    ev(Event::Info(format!("{}: {} files, {} patches", list.server, list.files.len(), list.patches.len())));
+    ev(Event::Info(format!(
+        "{}: {} files, {} patches (list serial {}{})",
+        list.server,
+        list.files.len(),
+        list.patches.len(),
+        list.serial,
+        if list.source.is_empty() { String::new() } else { format!(", from {}", list.source) }
+    )));
     let mut st = load_state(&cfg.client_dir);
     let mut sum = Summary::default();
     let dl = patch_dir(&cfg.client_dir).join("dl");
@@ -367,6 +475,9 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
             let (size, mtime) = size_mtime(&grf);
             st.targets.insert(name.clone(), Applied { id, sha256: local_sha, size, mtime });
         }
+    }
+    if !cfg.dry_run {
+        st.list_serial = st.list_serial.max(list.serial);
     }
     save_state(&cfg.client_dir, &st)?;
     if !cfg.dry_run {

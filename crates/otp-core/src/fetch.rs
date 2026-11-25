@@ -16,6 +16,15 @@ pub struct Auth {
 }
 
 static AUTH: Mutex<Option<Auth>> = Mutex::new(None);
+static PROXY: Mutex<Option<String>> = Mutex::new(None);
+
+/// An explicit HTTP(S) proxy (`http://host:port`, `socks5://host:port`). Without one the system settings and the
+/// `HTTP_PROXY` / `HTTPS_PROXY` variables apply.
+pub fn set_proxy(p: Option<String>) {
+    if let Ok(mut g) = PROXY.lock() {
+        *g = p.filter(|x| !x.trim().is_empty());
+    }
+}
 
 pub fn set_auth(a: Auth) {
     if let Ok(mut g) = AUTH.lock() {
@@ -35,19 +44,25 @@ fn auth_for(url: &str) -> Vec<(String, String)> {
     }
 }
 
-fn client() -> Result<reqwest::blocking::Client> {
+fn client(timeout: Option<std::time::Duration>) -> Result<reqwest::blocking::Client> {
     // redirects are followed by hand so a token is never sent to the host a redirect points to
-    Ok(reqwest::blocking::Client::builder()
+    let mut b = reqwest::blocking::Client::builder()
         .user_agent(concat!("OpenThor-Patcher/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(std::time::Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(None)
-        .build()?)
+        .timeout(timeout);
+    if let Some(p) = PROXY.lock().ok().and_then(|g| g.clone()) {
+        b = b.proxy(reqwest::Proxy::all(p)?);
+    }
+    Ok(b.build()?)
 }
 
+/// How long a download may deliver no data at all before the source counts as stalled (the next one is tried).
+const STALL: std::time::Duration = std::time::Duration::from_secs(45);
+
 /// GET with the configured headers for the host, following up to 6 redirects (headers only for hosts that are listed).
-fn send(url: &str, range_from: Option<u64>) -> Result<reqwest::blocking::Response> {
-    let c = client()?;
+fn send(url: &str, range_from: Option<u64>, timeout: Option<std::time::Duration>) -> Result<reqwest::blocking::Response> {
+    let c = client(timeout)?;
     let mut cur = url.to_string();
     for _ in 0..7 {
         let mut req = c.get(&cur);
@@ -109,7 +124,7 @@ pub fn get_bytes(url: &str) -> Result<Vec<u8>> {
         return std::fs::read(&p).map_err(|e| missing(&p, e));
     }
     let real = resolve(url);
-    let r = send(&real, None)?;
+    let r = send(&real, None, Some(std::time::Duration::from_secs(60)))?;
     if !r.status().is_success() {
         return Err(status_err(url, r.status()));
     }
@@ -136,7 +151,7 @@ pub fn download(url: &str, dest: &Path, size: u64, sha256: &str, progress: &mut 
         let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
         let have = if size > 0 && have > size { 0 } else { have };
         let real = resolve(url);
-        let mut resp = send(&real, if have > 0 { Some(have) } else { None })?;
+        let resp = send(&real, if have > 0 { Some(have) } else { None }, None)?;
         let resumed = resp.status().as_u16() == 206;
         if resp.status().as_u16() == 416 {
             // the partial file is already complete (or wrong): start over once
@@ -160,16 +175,54 @@ pub fn download(url: &str, dest: &Path, size: u64, sha256: &str, progress: &mut 
             .open(&part)
             .map_err(|e| io_err(&part, e))?;
         let mut done = if resumed { have } else { 0 };
-        let mut buf = vec![0u8; 256 * 1024];
-        loop {
-            let n = resp.read(&mut buf).map_err(|e| io_err(&part, e))?;
-            if n == 0 {
-                break;
+        // the body is read in a helper thread so that a source that goes silent can be given up on (and the cancel button
+        // keeps working while we wait)
+        let (tx, rx) = std::sync::mpsc::sync_channel::<std::io::Result<Vec<u8>>>(8);
+        std::thread::spawn(move || {
+            let mut resp = resp;
+            let mut buf = vec![0u8; 256 * 1024];
+            loop {
+                match resp.read(&mut buf) {
+                    Ok(0) => {
+                        let _ = tx.send(Ok(Vec::new()));
+                        break;
+                    }
+                    Ok(n) => {
+                        if tx.send(Ok(buf[..n].to_vec())).is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e));
+                        break;
+                    }
+                }
             }
-            out.write_all(&buf[..n]).map_err(|e| io_err(&part, e))?;
-            done += n as u64;
-            if !progress(done, total) {
-                return Err(Error::Cancelled);
+        });
+        let mut silent = std::time::Duration::ZERO;
+        let tick = std::time::Duration::from_millis(500);
+        loop {
+            match rx.recv_timeout(tick) {
+                Ok(Ok(chunk)) if chunk.is_empty() => break,
+                Ok(Ok(chunk)) => {
+                    silent = std::time::Duration::ZERO;
+                    out.write_all(&chunk).map_err(|e| io_err(&part, e))?;
+                    done += chunk.len() as u64;
+                    if !progress(done, total) {
+                        return Err(Error::Cancelled);
+                    }
+                }
+                Ok(Err(e)) => return Err(Error::Net(format!("{url}: {e}"))),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    silent += tick;
+                    if !progress(done, total) {
+                        return Err(Error::Cancelled);
+                    }
+                    if silent >= STALL {
+                        return Err(Error::Net(format!("{url}: no data for {} s, the source is stalled", STALL.as_secs())));
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Err(Error::Net(format!("{url}: the connection was closed early"))),
             }
         }
         out.flush().map_err(|e| io_err(&part, e))?;

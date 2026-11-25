@@ -22,6 +22,7 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "schema": 1,
   "server": "BurningRO",
   "updated": "2026-11-25T03:00:00Z",
+  "serial": 12,
   "allow_patching": true,
   "message": "",
   "notice": "Welcome back!",
@@ -50,7 +51,7 @@ patch list (`kind = "delta"`), never a change of `.thor`.
 }
 ```
 
-*Implemented (schema 1).* `files` are kept equal to the master by hash (small GRFs, dll, exe). `targets` are big GRFs
+*Implemented (schema 1).* `serial` grows by one with every publish that changes something (not for a publish without changes); a patcher reads the list from all of its sources, takes the highest valid one and refuses a list lower than the last one it applied (see [HOSTING.md](HOSTING.md)). Lists without it count as 0. `files` are kept equal to the master by hash (small GRFs, dll, exe). `targets` are big GRFs
 patched entry by entry: `baseline_sha256` is the version patch 0 starts from (what a fresh client package contains),
 `full` is an optional whole copy for repair and `full_id` the patch id it corresponds to. `patches` are applied in id
 order; ids are assigned by `otp publish`, nobody names or numbers them. A relative `url`/`file` is appended to the first

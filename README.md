@@ -93,6 +93,7 @@ swapped in; the old file is **replaced completely**, a `.bak` only stays with `-
   linked into the program; players do **not** install anything).
 - **Still `.thor`:** reads every Thor patch and the classic `plist.txt` server layout, so an existing patch server works
   unchanged (merge patches and loose-file patches).
+- **Several sources, one master version:** the patch list is read from every source you give, the newest valid one wins, a stale or dead mirror changes nothing, a client never rolls back, every file is checked by SHA-256 (see [docs/HOSTING.md](docs/HOSTING.md)).
 - **Hosting freedom:** static host, S3/R2, GitHub Releases, **GitHub / GitLab repositories** (`gh:owner/repo@main`, `gl:group/project@main`, private ones with a read-only token), or Google Drive / Dropbox / OneDrive share links. See [docs/HOSTING.md](docs/HOSTING.md).
 - **Player window:** Website button, link buttons with icons (Discord, forum, GitHub …), login/char/map server status dots, a big Play button and **RO Setup**.
 - **Themes, news and changelog:** the player window is a themeable folder (default: a Ragnarok-style night-blue theme with the logo sticking out of the window); news and changelog are written in the Patch Maker and travel in the signed patch list.

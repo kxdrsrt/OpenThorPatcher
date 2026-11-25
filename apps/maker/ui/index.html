@@ -168,7 +168,7 @@
         <h3>Mirrors</h3>
         <div class="card"><div id="mirror-list" class="list"></div>
           <div class="inline-add"><input id="mirror-new" placeholder="https://patch.example.com/" aria-label="Mirror URL"><button id="btn-mirror-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add mirror</button></div>
-          <p class="note">The first mirror is tried first; the others are used when it fails. Folder structure of the site is kept (<code>files/…</code>, <code>patches/…</code>).</p></div>
+          <p class="note">All mirrors must hold the <b>same</b> site (upload every publish to each of them). The first is tried first; if it is down or behind, the player's patcher reads the patch list from the others too and takes the <b>newest</b> one, and every file is checked by its SHA-256, so only the master version is ever installed. They are written into <code>patcher.json</code> as <code>fallback_urls</code>. Folder structure of the site is kept (<code>files/…</code>, <code>patches/…</code>).</p></div>
         <h3>Cloud links</h3>
         <div class="warnbox" id="cloud-warn"><b>Cloud drives are the fragile option.</b> Large files can hit download quotas or return a web page instead of the file; the patcher then stops with a clear message. Use them for small communities, and prefer a static host for anything big. Links are converted to direct downloads automatically.</div>
         <div class="row"><button id="btn-refresh-files" class="btn"><svg class="ic"><use href="#i-scan"/></svg>Refresh file list</button><span class="muted" id="links-summary"></span></div>

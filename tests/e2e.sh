@@ -184,4 +184,49 @@ echo g2 > "$M/a.cfg"; "$OTP" publish --project "$D/project.json" > "$D/pub2.log"
 git --git-dir="$D/remote.git" show main:patchlist.json | grep -q GitRO || fail "patchlist not in the remote"
 git --git-dir="$D/remote.git" ls-tree -r main --name-only | grep -q "^state/" && fail "state/ was pushed"
 ok "git hosting: publish commits and pushes the site, state/ stays local"
+
+# ---- several sources: the newest valid patch list wins, a stale or broken source changes nothing --------------------------
+D="$W/mirror"; M="$D/m"; A="$D/siteA"; B="$D/siteB"; P="$D/p"; mkdir -p "$M" "$P"
+echo m1 > "$M/a.cfg"
+cat > "$D/project.json" <<EOF
+{"server":"MirrorRO","client":"$M","site":"$A","base_urls":["file://$A","file://$B"],"sync":["a.cfg"]}
+EOF
+serial_of() { sed -n 's/.*"serial": *\([0-9]*\).*/\1/p' "$1/patchlist.json" | head -1; }
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "mirror publish 1"
+[ "$(serial_of "$A")" = 1 ] || fail "first publish should have serial 1, has '$(serial_of "$A")'"
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "mirror publish 1b"
+[ "$(serial_of "$A")" = 1 ] || fail "a publish without changes must keep the serial, has '$(serial_of "$A")'"
+ok "serial: 1 for the first publish, unchanged by a publish without changes"
+cp -R "$A" "$B"                                          # mirror B is in sync (serial 1)
+echo m2 > "$M/a.cfg"
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "mirror publish 2"
+[ "$(serial_of "$A")" = 2 ] || fail "second publish should have serial 2"
+# A is current (serial 2), B is behind (serial 1)
+"$OTP" patch --url "file://$B" --fallback-url "file://$A" --client "$P" > "$D/p1.log" 2>&1 || { cat "$D/p1.log"; fail "patch with a stale first source"; }
+cmp "$M/a.cfg" "$P/a.cfg" || fail "the client did not get the master version although a newer source existed"
+grep -q "list serial 2" "$D/p1.log" || { cat "$D/p1.log"; fail "the newest list (serial 2) was not used"; }
+ok "stale first source, current fallback: the newest list wins, the client gets the master version"
+# only the stale source reachable now: the client already applied serial 2, so serial 1 must be refused
+echo "tampered by a stale mirror" > "$B/files/a.cfg"
+if "$OTP" patch --url "file://$B" --client "$P" > "$D/p2.log" 2>&1; then fail "a list older than the applied one was accepted"; fi
+grep -q "already applied serial 2" "$D/p2.log" || { cat "$D/p2.log"; fail "no clear message for a stale source"; }
+cmp "$M/a.cfg" "$P/a.cfg" || fail "a stale source changed the client"
+ok "rollback protection: a source that is behind is refused, the client stays as it is"
+# primary gone completely
+echo m3 > "$M/a.cfg"; "$OTP" publish --project "$D/project.json" > /dev/null || fail "mirror publish 3"
+cp -R "$A/." "$B/"
+P2="$D/p2"; mkdir -p "$P2"
+"$OTP" patch --url "file://$D/does-not-exist" --fallback-url "file://$B" --client "$P2" > "$D/p3.log" 2>&1 || { cat "$D/p3.log"; fail "patch with the primary source gone"; }
+cmp "$M/a.cfg" "$P2/a.cfg" || fail "fallback source did not deliver the master version"
+ok "primary source gone: the fallback source serves everything"
+# a source with a damaged file: SHA-256 rejects it, the next source delivers
+echo m4 > "$M/a.cfg"; "$OTP" publish --project "$D/project.json" > /dev/null || fail "mirror publish 4"
+cp -R "$A/." "$B/"
+echo "damaged" > "$A/files/a.cfg"                          # base_urls lists A first, then B
+P3="$D/p3"; mkdir -p "$P3"
+"$OTP" patch --url "file://$A" --client "$P3" > "$D/p4.log" 2>&1 || { cat "$D/p4.log"; fail "patch with a damaged first source"; }
+cmp "$M/a.cfg" "$P3/a.cfg" || fail "a damaged file was accepted"
+grep -q "trying the next source" "$D/p4.log" || { cat "$D/p4.log"; fail "the fallback was not announced"; }
+ok "damaged file on one source: rejected by SHA-256, the next source delivers the master version"
+
 echo "ALL OK"

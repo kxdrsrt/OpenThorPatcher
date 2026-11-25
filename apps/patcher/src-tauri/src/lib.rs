@@ -47,6 +47,13 @@ struct Cfg {
     headers: std::collections::BTreeMap<String, String>,
     #[serde(default)]
     header_hosts: Vec<String>,
+    /// More patch sites with the same layout as `patch_url`; the newest valid patch list of all of them is used, and one
+    /// being down or behind changes nothing.
+    #[serde(default)]
+    fallback_urls: Vec<String>,
+    /// Optional HTTP(S) or SOCKS5 proxy; without it the system settings are used.
+    #[serde(default)]
+    proxy: Option<String>,
     /// For classic servers without a patch list: what to show as server status.
     #[serde(default)]
     servers: Vec<ServerEntry>,
@@ -122,6 +129,8 @@ fn core_config(app: &tauri::AppHandle, cfg: &Cfg, st: &App) -> Config {
     c.cancel = Some(st.cancel.clone());
     c.headers = cfg.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     c.header_hosts = cfg.header_hosts.clone();
+    c.fallback_urls = cfg.fallback_urls.clone();
+    c.proxy = cfg.proxy.clone();
     c
 }
 

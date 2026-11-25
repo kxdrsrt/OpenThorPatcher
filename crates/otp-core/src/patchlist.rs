@@ -16,6 +16,14 @@ pub struct PatchList {
     /// UTC time of the last publish (informational).
     #[serde(default)]
     pub updated: String,
+    /// Grows with every publish that changes something. A client takes the newest valid list of all the sources it knows
+    /// and never accepts one with a lower number than the last list it applied (a stale mirror, a rollback). Lists made
+    /// before this field existed have 0.
+    #[serde(default)]
+    pub serial: u64,
+    /// Not part of the file: the patch site folder this list was read from (set by the patcher).
+    #[serde(skip)]
+    pub source: String,
     /// `false` = the operator closed patching (maintenance); `message` says why.
     #[serde(default = "yes")]
     pub allow_patching: bool,

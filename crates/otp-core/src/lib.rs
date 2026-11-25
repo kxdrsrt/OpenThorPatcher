@@ -32,6 +32,9 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("http: {0}")]
     Http(#[from] reqwest::Error),
+    /// A source stopped answering (no data for a long time).
+    #[error("{0}")]
+    Net(String),
     /// The file does not exist on the server (HTTP 404, missing file://).
     #[error("not found: {0}")]
     NotFound(String),

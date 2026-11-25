@@ -143,6 +143,11 @@ fn patcher_config(project: Project, pub_hex: String, list_url: Option<String>, h
     if let Some(u) = list_url.filter(|u| !u.is_empty()) {
         v["list_url"] = serde_json::Value::String(u);
     }
+    // every further mirror is also a place to read the patch list from, so the first one being down does not stop patching
+    let more: Vec<&String> = project.base_urls.iter().skip(1).filter(|u| !u.is_empty()).collect();
+    if !more.is_empty() {
+        v["fallback_urls"] = serde_json::json!(more);
+    }
     if let (Some(n), Some(val)) = (header_name.filter(|n| !n.is_empty()), header_value.filter(|n| !n.is_empty())) {
         v["headers"] = serde_json::json!({ n: val });
     }

@@ -12,7 +12,89 @@ files/data.grf          (only with --full) whole GRFs for repair
 
 Players need nothing but `https` access to it. **Static hosting is the recommended way**: your own web server, an
 S3-compatible bucket (Cloudflare R2, Backblaze B2, MinIO), GitHub Releases/Pages, or a CDN. HTTP `Range` requests make
-downloads resumable; several `base_urls` give you mirrors (the first that works wins).
+downloads resumable; several `base_urls` give you mirrors (see [Several sources](#several-sources-mirrors-and-the-master-version)).
+
+## Where to put what
+
+There are two different jobs, and they need different places:
+
+1. **The first full client** (a zip of the master client, a few GB): every new player downloads it **once**, by hand, from
+   your website. It does not have to be patchable and can sit anywhere that gives a direct download link: your own web
+   server, Cloudflare R2 / Backblaze B2, a torrent, Google Drive, MEGA. The patcher is not involved.
+2. **The patch site** (`patchlist.json`, small whole files, `.thor` diffs): the patcher reads it at every start. It must
+   be plain `https` with direct file URLs.
+
+Recommended for the patch site, in this order:
+
+| Place | Why |
+|---|---|
+| **Your own server** (nginx, see [DEPLOY.md](DEPLOY.md), runs next to your game server) | Simplest, no limits but your line, `Range` works. The `deploy/` folder has the container. |
+| **Cloudflare R2** (S3 compatible) | No traffic fees, a custom domain, fast worldwide. Good as the second source. |
+| Backblaze B2 / MinIO / any S3 bucket | Same idea, cheap storage. |
+| GitHub / GitLab repository | Free, versioned, public or private ([below](#github-and-gitlab)). Only for `patchlist.json` and the diffs: 100 MB per file in git. |
+| Google Drive / Dropbox / OneDrive | Works through share links ([Cloud drives](#cloud-drives)), but quotas and changing links make it the fragile choice. |
+
+**MEGA (mega.nz) is not suitable as a patch source.** A MEGA link is not a file URL: the content is encrypted in the
+browser with a key that sits in the link (`mega.nz/file/<id>#<key>`), and it is downloaded through MEGA's own protocol, not
+with a plain `GET` and `Range`. The patcher would need MEGA's SDK, and free accounts have transfer limits. (This is from
+MEGA's public documentation, not tested here.) MEGA is fine for job 1, the one-time full client download by hand.
+
+Normal patches are small: `otp publish` writes a `.thor` diff with only what changed (a 4-entry change to a 2.5 GB
+`data.grf` is a 166-byte patch), so a patch site needs little space and little traffic. Whole GRFs are only uploaded with
+`--full` (for repairing a damaged client) and can live on a bigger, slower place.
+
+## Several sources (mirrors) and the master version
+
+You can list more than one place. **Every source must hold the same site** (the same publish). What the patcher does with
+them:
+
+* **The patch list is read from all sources** and the one with the highest `serial` that has a valid signature wins
+  (the first source wins a tie). `serial` grows by one with every publish that changes something. So a source that is
+  down, slow or **behind** simply does not matter.
+* **A client never goes back.** It remembers the serial of the last list it applied and refuses an older one ("every
+  source is out of date"), also when only a stale source is reachable. A mirror that has not synced yet cannot roll players
+  back to an old version.
+* **Every file is checked by its SHA-256 from the signed list.** A mirror with an old, partial or damaged file is thrown
+  away for that file and the next source is asked; only the master version is ever installed.
+* A source that does not answer (connection refused, or **no data for 45 s**) is skipped for the rest of the run, so a dead
+  mirror does not cost its timeout for every file. The player's cancel button keeps working while it waits.
+* The source the winning list came from is asked first for the files.
+
+Set it up in the Patch Maker (Hosting → *Mirrors*: the first is the primary, the others are written into `patcher.json` as
+`fallback_urls`), or by hand:
+
+```json
+{
+  "name": "MyRO",
+  "patch_url": "https://patch.myro.example/",
+  "fallback_urls": ["https://myro.r2.example.com/patch/", "gh:me/patches@main"],
+  "pub_key": "<hex>",
+  "proxy": "http://proxy.example:3128"
+}
+```
+
+On the command line: `otp patch --url <primary> --fallback-url <second> --fallback-url <third> ...`.
+
+**Publishing to several places without ever showing a half-uploaded site:** publish once, then upload `files/` and `patches/`
+to every source **first** and `patchlist.json` + `patchlist.json.sig` **last**. A client that sees the new list can then
+always find the files it names. With rclone, for example:
+
+```sh
+for dest in r2:myro-patch myserver:/var/www/patch; do
+  rclone copy site/files   "$dest/files";   rclone copy site/patches "$dest/patches"
+  rclone copy site/patchlist.json "$dest";  rclone copy site/patchlist.json.sig "$dest"
+done
+```
+
+A token for a private host (`headers`) is only sent to `patch_url`'s host unless you list others in `header_hosts`, so a
+GitHub token never goes to the second source.
+
+**Proxy:** without a setting the system proxy (Windows settings, `HTTP_PROXY` / `HTTPS_PROXY`) is used. `"proxy"` in
+`patcher.json` (or `--proxy`) forces one (`http://`, `https://` or `socks5://`).
+
+*Tested:* the end-to-end script covers a stale first source with a current fallback, a client refusing an older list than the
+one it applied, a missing primary, and a damaged file on one source (`tests/e2e.sh`). The 45-second stall limit and the proxy
+setting are in the code and have **not** been tested against a real stalled server or a real proxy.
 
 ## Cloud drives
 
@@ -63,10 +145,10 @@ git-ignored automatically). Without it, commit and push the site folder yourself
 *Contents: read*, GitLab project access token with `read_repository`) and put it into the client's `patcher.json`:
 
 ```json
-{ "headers": ["Authorization: Bearer ghp_xxx"], "header_hosts": ["raw.githubusercontent.com"] }
+{ "headers": { "Authorization": "Bearer ghp_xxx" }, "header_hosts": ["raw.githubusercontent.com"] }
 ```
 
-GitLab uses `"PRIVATE-TOKEN: glpat-xxx"` with `gitlab.com`. The CLI takes `--header "Name: value" --header-host host`.
+GitLab uses `{ "PRIVATE-TOKEN": "glpat-xxx" }` with `gitlab.com`. The CLI takes `--header "Name: value" --header-host host`.
 The header is sent **only** to the listed hosts and never to a redirect target (redirects are followed manually).
 A 401/403 is reported as "access denied".
 
