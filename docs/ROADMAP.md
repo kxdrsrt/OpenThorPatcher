@@ -4,10 +4,10 @@
 |---|---|---|
 | M0 | Plan | done |
 | M1 | Core `otp-core`: patch list, download with resume + SHA-256, Ed25519, state | done |
-| M2 | Apply engine: Thor merge into GRFs (plain and encrypted) through `rgrf-core`, check, atomic swap, `.bak`; loose-file Thor patches; `DATA.INI` writer | done, tested on synthetic GRFs and on the real 2.5 GB `data.grf` |
+| M2 | Apply engine: Thor merge into GRFs (plain and encrypted) through `rgrf-core`, check, atomic swap (old file replaced completely, optional `.bak`); loose-file Thor patches; `DATA.INI` writer | done, tested on synthetic GRFs and on the real 2.5 GB `data.grf` |
 | M3 | CLI `otp`: `keygen`, `init`, `scan`, `publish` (`--dry-run`, `--json`), `patch`, `pack` | done, `tests/e2e.sh` |
 | M3b | Classic Thor Patcher servers (`plist.txt`), removals (GRF entries, files, folders), cloud links, optional packs | done, `tests/e2e.sh` |
-| M4 | Apps: **Patcher** (players) and **Patch Maker** (operators) in Tauri 2 | built; UI logic tested with a scripted DOM; **not yet clicked through on a real desktop** |
+| M4 | Apps: **Patcher** (players) and **Patch Maker** (operators) in Tauri 2, themes, news and changelog | built for macOS and Windows x64 (cross-compiled); the Patcher was run on Windows 11 (x64 emulation) against an nginx container; UI logic also tested with a scripted DOM; **not yet clicked through by a person** |
 | M5 | MCP server `otp-mcp` | done (smoke tested over stdio) |
 | M6 | OdinGuard integration: `og grf-scan` hook in the Maker, manifest check after patching | planned |
 | M7 | Self-update (signed), installers, themes (HTML/CSS skin), languages | planned |

@@ -22,9 +22,10 @@ reused with attribution.
 
 ## 2. Building blocks
 
-* **RustyGRF `rgrf-core`** (library): open/merge/patch/verify/encrypt GRF 0x102-0x300, GPF, GSF, Thor, RGZ, repack,
-  hash lists. The patcher calls it, it does not reimplement archive code. Anything missing is fixed in RustyGRF
-  (which also serves as the hard test of that library).
+* **RustyGRF `rgrf-core`** (library, pinned git revision): open/merge/patch/verify/encrypt GRF 0x102-0x300, GPF, GSF,
+  Thor, RGZ, repack, hash lists. It is **compiled into** the programs: players and operators do **not** need RustyGRF
+  installed (the `rgrf` CLI is only used by the test script to build sample GRFs). Reusing its source avoids a second,
+  worse GRF implementation; anything missing is fixed in RustyGRF, which also serves as the hard test of that library.
 * **Tauri 2** (same stack as RustyGRF and the OdinGuard Studio) for the window; the page is plain HTML/CSS/JS that an
   operator can replace. **[offen]** WebView2 does not run on Windows 7/8.1; many Ragnarok players still use them. Two
   answers to measure: a Windows 7 capable build (older WebView runtime, or a tiny native UI), and a `--no-ui` mode that
@@ -39,8 +40,7 @@ reused with attribution.
    `patcher.pub`. Legacy: `plist.txt`.
 3. Compare with the local state file (`server.dat`-like: last applied patch id per patch set).
 4. Download missing patches (resumable, SHA-256 each), apply them in order. **Per target GRF** build the result in a
-   temporary file, run `rgrf verify`-equivalent checks, then swap atomically; keep `<name>.grf.bak` until the next
-   successful start.
+   temporary file, run `rgrf verify`-equivalent checks, then swap atomically; the old file is replaced completely (a `<name>.bak` only if the player or `--keep-backup` asks for it).
 5. Write `DATA.INI` from the *managed list* plus the player's pack choices (see FORMATS.md).
 6. Optional OdinGuard check (ODINGUARD.md), then start the client with its parameters.
 
@@ -56,7 +56,7 @@ reused with attribution.
 
 ## 5. Decisions still open
 
-1. Windows 7 support, see above.
+1. ~~Windows 7 support~~ decided: no (WebView2). The CLI and core have no such limit.
 2. Binary delta for big non-GRF files (the game exe): whole-file replacement first, delta only if it is worth it.
-3. Whether the patcher also builds patches (`otp make`) or keeps using `rgrf thor create`. Plan: a thin `otp` CLI
-   that wraps `rgrf` and writes the signed `patchlist.json`.
+3. ~~Who builds patches~~ decided: `otp publish` / the Patch Maker diff the master client against the last publish and
+   write the `.thor` files themselves (through `rgrf-core`), see README.

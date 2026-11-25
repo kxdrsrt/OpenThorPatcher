@@ -45,6 +45,37 @@ pub struct PatchList {
     pub client: Option<ClientCfg>,
     #[serde(default)]
     pub data_ini: Option<DataIniCfg>,
+    /// News shown in the patcher's News tab (newest first, written by the operator).
+    #[serde(default)]
+    pub news: Vec<NewsItem>,
+    /// Changelog shown in the patcher's Changelog tab (newest first).
+    #[serde(default)]
+    pub changelog: Vec<ChangeEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NewsItem {
+    /// Free text, usually `YYYY-MM-DD`.
+    #[serde(default)]
+    pub date: String,
+    pub title: String,
+    /// Plain text with a tiny markup: blank line = paragraph, `- ` = list item, `**bold**`.
+    #[serde(default)]
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ChangeEntry {
+    #[serde(default)]
+    pub date: String,
+    /// Version or patch label, for example `2026-11-25` or `Patch 12`.
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub title: String,
+    /// One line per change.
+    #[serde(default)]
+    pub items: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

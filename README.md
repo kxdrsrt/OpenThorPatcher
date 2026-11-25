@@ -39,7 +39,7 @@ Three programs and one library:
 Changing **one map file** means one small `.thor` containing that file, not a 2.5 GB download. Measured on the real
 2.5 GB client `data.grf` (202,355 entries): publishing the baseline hashes everything in 36 s, a publish with 4
 changes writes a 166-byte patch, applying it takes 12 s of disk work (a new 2.5 GB GRF is written, checked, and
-swapped in; the old one stays as `.bak`), and a start without changes takes 0.0 s.
+swapped in; the old file is **replaced completely**, a `.bak` only stays with `--keep-backup`; for a moment both exist, so a 2.5 GB GRF needs 2.5 GB free), and a start without changes takes 0.0 s.
 
 ## Why it is better
 
@@ -54,6 +54,7 @@ swapped in; the old one stays as `.bak`), and a start without changes takes 0.0 
 - **Still `.thor`:** reads every Thor patch and the classic `plist.txt` server layout, so an existing patch server works
   unchanged (merge patches and loose-file patches).
 - **Hosting freedom:** static host, S3/R2, GitHub Releases, or Google Drive / Dropbox / OneDrive share links.
+- **Themes, news and changelog:** the player window is a themeable folder (default: a Ragnarok-style night-blue theme with the logo sticking out of the window); news and changelog are written in the Patch Maker and travel in the signed patch list.
 - **Optional packs** (for example OdinGuard's competitive pack) with a per-player switch that survives patching.
 - **Scriptable and AI-ready:** CLI with `--json`, MCP server.
 
@@ -79,6 +80,8 @@ Players get `patcher.json` next to the patcher (the Patch Maker writes it):
 | | |
 |---|---|
 | [docs/COMPARISON.md](docs/COMPARISON.md) | Thor Patcher, NeonCube, rpatchur and OpenThor Patcher side by side |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | Live-test setup, Docker (nginx site, `otp` image), checklist with the honest state |
+| [docs/THEMES.md](docs/THEMES.md) | Themes (a folder, the Ragnarok-style default), news and changelog |
 | [docs/HOSTING.md](docs/HOSTING.md) | Static hosts and cloud drives, what works, what does not |
 | [docs/MCP.md](docs/MCP.md) | The MCP server: tools, safety, an example session |
 | [docs/DESIGN.md](docs/DESIGN.md) | Architecture and decisions |

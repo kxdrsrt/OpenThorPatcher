@@ -1,0 +1,18 @@
+# OpenThor patch site on a server.
+#   docker compose up -d site                              # serve ./site on port 8080
+#   docker compose run --rm publish                        # run `otp publish` with the master client mounted
+# Edit the paths below. The master client and ./cfg (project file, signing key) never leave the server's disk.
+services:
+  site:
+    build: ./site
+    ports: ["8080:80"]
+    volumes: ["./data/site:/usr/share/nginx/html:ro"]
+    restart: unless-stopped
+  publish:
+    profiles: ["tools"]
+    build: { context: .., dockerfile: deploy/otp/Dockerfile }
+    command: ["publish", "--project", "/cfg/otp-project.json"]
+    volumes:
+      - ./data/master:/master:ro     # the master client
+      - ./data/site:/site            # the patch site (shared with the nginx service)
+      - ./data/cfg:/cfg              # otp-project.json (client: /master, site: /site) and signing.seed

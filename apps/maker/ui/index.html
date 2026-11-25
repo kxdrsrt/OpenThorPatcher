@@ -32,6 +32,7 @@
     <symbol id="i-patch" viewBox="0 0 24 24"><path d="M13 3 5 13h6l-1 8 8-10h-6z"/></symbol>
     <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
     <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></symbol>
+    <symbol id="i-news" viewBox="0 0 24 24"><path d="M5 4h11a2 2 0 0 1 2 2v13a1 1 0 0 0 1 1H7a2 2 0 0 1-2-2z"/><path d="M18 8h2v10a2 2 0 0 1-2 2M8 8h6M8 12h6M8 16h4"/></symbol>
     <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
   </defs>
 </svg>
@@ -49,6 +50,7 @@
       <button data-tab="remove"><svg class="ic"><use href="#i-remove"/></svg>Removals</button>
       <div class="nav-group">Players</div>
       <button data-tab="players"><svg class="ic"><use href="#i-players"/></svg>Game &amp; DATA.INI</button>
+      <button data-tab="news"><svg class="ic"><use href="#i-news"/></svg>News &amp; changelog</button>
       <button data-tab="hosting"><svg class="ic"><use href="#i-cloud"/></svg>Hosting</button>
       <div class="nav-group">Release</div>
       <button data-tab="publish"><svg class="ic"><use href="#i-publish"/></svg>Publish</button>
@@ -134,6 +136,22 @@
           <label class="switch-row"><span>Patching open<small>switch off to stop players updating (they see your message)</small></span><span class="switch"><input type="checkbox" id="m-open"><i></i></span></label>
           <label class="fld wide"><span>Message while closed</span><input id="m-msg" placeholder="Maintenance until 18:00 UTC"></label>
         </div>
+      </section>
+
+      <section id="tab-news" class="tab needs-project">
+        <p class="lead">Shown in the player's patcher. News and changelog are part of the signed patch list: nothing to host, they arrive with the next publish. Newest first.</p>
+        <h3>News</h3>
+        <div id="news-list" class="list"></div>
+        <div class="inline-add"><button id="btn-news-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add news</button></div>
+        <p class="note">Text: a blank line starts a paragraph, <code>- </code> a list item, <code>**bold**</code>, <code>[text](https://link)</code>.</p>
+        <h3>Changelog</h3>
+        <div id="change-list" class="list"></div>
+        <div class="inline-add"><button id="btn-change-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add changelog entry</button></div>
+        <h3>Website</h3>
+        <div class="card form"><label class="fld wide"><span>News website (https, shown in a third tab)</span><input id="n-url2" placeholder="https://example.com/news"></label></div>
+        <h3>Theme</h3>
+        <p class="note" style="margin:0 0 10px">The patcher's look is a folder <code>patcher-theme/</code> in the client: <code>theme.json</code>, <code>theme.css</code>, a logo and fonts. Export the built-in "Midgard Night" theme, change it, and put the folder into the master client; the Files page then syncs it to players like any other file.</p>
+        <div class="row"><button id="btn-theme" class="btn"><svg class="ic"><use href="#i-save"/></svg>Export the default theme…</button></div>
       </section>
 
       <section id="tab-hosting" class="tab needs-project">

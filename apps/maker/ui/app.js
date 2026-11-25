@@ -7,7 +7,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const icon = (n) => `<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const human = (n) => { const u = ["B", "KB", "MB", "GB"]; let i = 0, v = Number(n) || 0; while (v >= 1024 && i < 3) { v /= 1024; i++; } return (i ? v.toFixed(1) : v) + " " + u[i]; };
-const TITLES = { project: "Project", files: "Files", remove: "Removals", players: "Game & DATA.INI", hosting: "Hosting", publish: "Publish" };
+const TITLES = { project: "Project", files: "Files", remove: "Removals", players: "Game & DATA.INI", news: "News & changelog", hosting: "Hosting", publish: "Publish" };
 
 let project = null, path = null, tab = "project", dirty = false, scanItems = [], siteFiles = [], toastTimer = 0, pubHex = "";
 
@@ -183,6 +183,42 @@ function renderPacks() {
   t.appendChild(body);
 }
 
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function renderNewsPage() {
+  bind("#n-url2", () => project.news_url, (v) => (project.news_url = v));
+  const nl = $("#news-list");
+  nl.innerHTML = "";
+  if (!project.news.length) nl.appendChild(el("div", "note", "No news yet."));
+  project.news.forEach((n, i) => {
+    const card = el("div", "card form");
+    card.innerHTML = `<label class="fld"><span>Date</span><input value="${esc(n.date)}"></label><label class="fld"><span>Title</span><input value="${esc(n.title)}"></label><label class="fld wide"><span>Text</span><textarea rows="4">${esc(n.body)}</textarea></label><div class="row"><button class="btn small" data-act="up">${icon("up")}Up</button><button class="btn small" data-act="down">${icon("down")}Down</button><button class="btn small danger" data-act="del">${icon("trash")}Remove</button></div>`;
+    const [d, t] = card.querySelectorAll("input"); const ta = card.querySelector("textarea");
+    d.oninput = () => { n.date = d.value; touch(); }; t.oninput = () => { n.title = t.value; touch(); }; ta.oninput = () => { n.body = ta.value; touch(); };
+    card.querySelectorAll("button").forEach((b) => (b.onclick = () => moveItem(project.news, i, b.dataset.act, renderNewsPage)));
+    nl.appendChild(card);
+  });
+  const cl = $("#change-list");
+  cl.innerHTML = "";
+  if (!project.changelog.length) cl.appendChild(el("div", "note", "No changelog yet."));
+  project.changelog.forEach((c, i) => {
+    const card = el("div", "card form");
+    card.innerHTML = `<label class="fld"><span>Version / patch</span><input value="${esc(c.version)}" placeholder="Patch 12"></label><label class="fld"><span>Date</span><input value="${esc(c.date)}"></label><label class="fld wide"><span>Title (optional)</span><input value="${esc(c.title)}"></label><label class="fld wide"><span>Changes (one per line)</span><textarea rows="4">${esc((c.items || []).join("\n"))}</textarea></label><div class="row"><button class="btn small" data-act="up">${icon("up")}Up</button><button class="btn small" data-act="down">${icon("down")}Down</button><button class="btn small danger" data-act="del">${icon("trash")}Remove</button></div>`;
+    const [v, d, t] = card.querySelectorAll("input"); const ta = card.querySelector("textarea");
+    v.oninput = () => { c.version = v.value; touch(); }; d.oninput = () => { c.date = d.value; touch(); }; t.oninput = () => { c.title = t.value; touch(); };
+    ta.oninput = () => { c.items = ta.value.split("\n").map((x) => x.trim()).filter(Boolean); touch(); };
+    card.querySelectorAll("button").forEach((b) => (b.onclick = () => moveItem(project.changelog, i, b.dataset.act, renderNewsPage)));
+    cl.appendChild(card);
+  });
+}
+
+function moveItem(arr, i, act, redraw) {
+  if (act === "del") arr.splice(i, 1);
+  else if (act === "up" && i > 0) [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
+  else if (act === "down" && i < arr.length - 1) [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
+  touch(); redraw();
+}
+
 function renderMirrors() {
   list("#mirror-list", project.base_urls, "No mirror yet: add one, or give every file a cloud link below.", (i) => { project.base_urls.splice(i, 1); renderMirrors(); renderConfig(); });
 }
@@ -226,6 +262,7 @@ function setTab(name) {
   if (name === "hosting") { renderMirrors(); renderLinks(); renderConfig(); }
   if (name === "players") renderPlayers();
   if (name === "remove") renderRemove();
+  if (name === "news") renderNewsPage();
   if (name === "project") renderProject();
 }
 
@@ -240,6 +277,8 @@ function render() {
 async function openProject(p) {
   project = await invoke("load_project", { path: p });
   project.url_map = project.url_map || {};
+  project.news = project.news || [];
+  project.changelog = project.changelog || [];
   path = p;
   render();
   status("Project opened.");
@@ -267,6 +306,8 @@ async function newProject() {
   try {
     project = await invoke("new_project", { path: file, server, client, site });
     project.url_map = project.url_map || {};
+    project.news = project.news || [];
+    project.changelog = project.changelog || [];
     path = file;
     tab = "project";
     render();
@@ -320,6 +361,13 @@ $("#remove-new").onkeydown = (e) => e.key === "Enter" && $("#btn-remove-add").cl
 $("#btn-order-add").onclick = () => { const v = $("#order-new").value.trim(); if (v) { ensureIni().order.push(v); $("#order-new").value = ""; touch(); renderOrder(); } };
 $("#order-new").onkeydown = (e) => e.key === "Enter" && $("#btn-order-add").click();
 $("#btn-pack-add").onclick = () => { ensureIni().packs.push({ id: "pack" + (project.data_ini.packs.length + 1), file: "", title: "", default: true, locked: false }); touch(); renderPacks(); };
+$("#btn-news-add").onclick = () => { project.news.unshift({ date: today(), title: "", body: "" }); touch(); renderNewsPage(); };
+$("#btn-change-add").onclick = () => { project.changelog.unshift({ date: today(), version: "", title: "", items: [] }); touch(); renderNewsPage(); };
+$("#btn-theme").onclick = async () => {
+  const dir = await T.dialog.open({ directory: true, title: "Folder to write patcher-theme/ into (usually the master client)" });
+  if (!dir) return;
+  invoke("export_theme", { dir }).then((p) => status("Theme written to " + p + ". Edit it, then add its files on the Files page.")).catch((e) => status(String(e), false));
+};
 $("#btn-mirror-add").onclick = () => { const v = $("#mirror-new").value.trim(); if (v) { project.base_urls.push(v); $("#mirror-new").value = ""; touch(); renderMirrors(); renderConfig(); } };
 $("#mirror-new").onkeydown = (e) => e.key === "Enter" && $("#btn-mirror-add").click();
 $("#list-url").oninput = renderConfig;

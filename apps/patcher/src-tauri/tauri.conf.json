@@ -3,17 +3,38 @@
   "productName": "OpenThor Patcher",
   "version": "0.1.0",
   "identifier": "org.openthor.patcher",
-  "build": { "frontendDist": "../ui" },
+  "build": {
+    "frontendDist": "../ui"
+  },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{ "title": "OpenThor Patcher", "width": 920, "height": 580, "minWidth": 760, "minHeight": 520 }],
-    "security": { "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; frame-src https:" }
+    "windows": [
+      {
+        "title": "OpenThor Patcher",
+        "width": 960,
+        "height": 640,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src https:"
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "category": "Utility",
     "shortDescription": "Keeps a Ragnarok Online client up to date",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }

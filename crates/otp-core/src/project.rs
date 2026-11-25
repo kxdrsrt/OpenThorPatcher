@@ -1,6 +1,6 @@
 //! The operator's project file (`otp-project.json`): everything `otp publish` and the Patch Maker need.
 
-use crate::patchlist::{ClientCfg, DataIniCfg};
+use crate::patchlist::{ChangeEntry, ClientCfg, DataIniCfg, NewsItem};
 use crate::{io_err, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -51,6 +51,10 @@ pub struct Project {
     pub allow_patching: bool,
     #[serde(default)]
     pub message: String,
+    #[serde(default)]
+    pub news: Vec<NewsItem>,
+    #[serde(default)]
+    pub changelog: Vec<ChangeEntry>,
 }
 
 impl Project {
@@ -72,6 +76,8 @@ impl Project {
             url_map: BTreeMap::new(),
             allow_patching: true,
             message: String::new(),
+            news: vec![],
+            changelog: vec![],
         }
     }
 

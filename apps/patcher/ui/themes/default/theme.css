@@ -1,0 +1,75 @@
+/* OpenThor Patcher: default theme "Midgard Night" (Ragnarok-style).
+   Night-blue panels in a steel frame with gold lettering, a Cinzel title face, a blue loading bar like the game's.
+   Copy this folder to <client>/patcher-theme/, edit theme.json + this file, and ship it with the patcher. */
+@font-face { font-family: "Cinzel"; src: url("fonts/Cinzel.ttf") format("truetype"); font-weight: 400 900; font-display: swap; }
+
+:root {
+  color-scheme: dark;
+  --bg: #0a1226; --surface: #0e1a36; --raised: #16264a; --side: rgba(8, 14, 32, .9);
+  --line: rgba(150, 175, 225, .22); --line-strong: rgba(150, 175, 225, .42);
+  --text: #e8eefc; --muted: #9db0d6;
+  --accent: #e9c46a; --accent-ink: #2a1c05; --accent-soft: rgba(233, 196, 106, .16);
+  --ok: #7fe0a0; --warn: #f2c260; --danger: #ff8a7a;
+  --steel-hi: #c9d6f2; --steel: #7f93b8; --steel-lo: #3a4d7a;
+  --display: "Cinzel", "Palatino Linotype", Georgia, serif;
+  --logo-w: 400px; --logo-h: 257px; --overhang: 84px;
+}
+body { font: 13px/1.5 system-ui, "Segoe UI", sans-serif; color: var(--text); }
+.stage-wrap::before {
+  /* a soft glow behind the logo, outside the frame, so the logo reads against any desktop */
+  content: ""; position: absolute; top: 0; left: 50%; width: 560px; height: 220px; transform: translateX(-50%); z-index: 0;
+  background: radial-gradient(closest-side, rgba(70, 120, 255, .30), transparent 70%); pointer-events: none;
+}
+.frame {
+  z-index: 1; border-radius: 12px;
+  background:
+    radial-gradient(1.2px 1.2px at 12% 22%, rgba(255,255,255,.7), transparent 60%),
+    radial-gradient(1px 1px at 78% 14%, rgba(255,255,255,.55), transparent 60%),
+    radial-gradient(1.4px 1.4px at 64% 64%, rgba(180,210,255,.6), transparent 60%),
+    radial-gradient(1px 1px at 30% 80%, rgba(255,255,255,.45), transparent 60%),
+    radial-gradient(1.2px 1.2px at 90% 88%, rgba(255,255,255,.5), transparent 60%),
+    radial-gradient(120% 70% at 50% 0%, rgba(60, 100, 220, .38), transparent 60%),
+    linear-gradient(180deg, #11204a 0%, #0a1430 55%, #070d20 100%);
+  border: 2px solid var(--steel);
+  box-shadow: 0 0 0 2px #060b1a, 0 0 0 3px var(--steel-lo), inset 0 0 0 1px rgba(255, 255, 255, .08), inset 0 0 50px rgba(50, 90, 210, .28), 0 18px 50px rgba(0, 0, 0, .65);
+}
+.frame::before, .frame::after { /* corner studs */
+  content: ""; position: absolute; width: 9px; height: 9px; border-radius: 50%; top: 7px;
+  background: radial-gradient(circle at 35% 30%, #fff6d0, #c79a2e 55%, #6b4c10); box-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+.frame::before { left: 8px; } .frame::after { right: 8px; }
+.bar { border-bottom: 1px solid rgba(150, 175, 225, .14); padding-left: 28px; padding-right: 26px; }
+.who span { font-family: var(--display); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-shadow: 0 1px 0 #000, 0 0 10px rgba(233,196,106,.35); }
+.who i { color: var(--muted); }
+.wbtn { background: linear-gradient(180deg, #2b3f72, #16254a); border: 1px solid var(--steel); color: var(--steel-hi); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); transition: filter .12s ease-out, transform .1s ease-out; }
+.wbtn:hover { filter: brightness(1.25); } .wbtn:active { transform: scale(.94); }
+.wbtn.close:hover { background: linear-gradient(180deg, #c0483a, #7d231b); }
+.tabs button { font-family: var(--display); font-weight: 600; letter-spacing: .06em; color: var(--muted); background: linear-gradient(180deg, rgba(40,60,110,.6), rgba(15,25,55,.6)); border: 1px solid var(--line-strong); border-bottom: 0; border-radius: 8px 8px 0 0; transition: color .12s ease-out, background-color .12s ease-out; }
+.tabs button:hover { color: var(--text); }
+.tabs button.active { color: var(--accent); background: linear-gradient(180deg, rgba(60,90,160,.75), rgba(10,18,40,.9)); box-shadow: inset 0 2px 0 var(--accent); }
+.box { background: rgba(4, 9, 24, .72); border: 1px solid var(--line-strong); border-radius: 0 8px 8px 8px; box-shadow: inset 0 0 30px rgba(0, 0, 0, .5); }
+.news-item, .change-entry { border-bottom: 1px dashed rgba(150, 175, 225, .22); }
+.news-item h4, .change-entry h4 { font-family: var(--display); color: var(--steel-hi); letter-spacing: .03em; }
+.news-item time, .change-entry time { color: var(--accent); }
+.change-entry .ver { background: linear-gradient(180deg, #3b5aa8, #1d3270); color: #fff; border: 1px solid var(--steel); }
+.news-item a { color: #8fb8ff; }
+.state { padding: 10px 12px; border-radius: 8px; background: rgba(4, 9, 24, .6); border: 1px solid var(--line-strong); }
+.state .ic { color: var(--accent); }
+.state b { font-family: var(--display); letter-spacing: .04em; }
+.state.ok .ic { color: var(--ok); } .state.warn .ic { color: var(--warn); } .state.bad .ic { color: var(--danger); }
+.progress { height: 18px; border-radius: 4px; background: linear-gradient(180deg, #02050f, #0a1228); border: 2px solid var(--steel); box-shadow: 0 0 0 1px #040810, inset 0 2px 4px rgba(0, 0, 0, .8); }
+.progress i { background: linear-gradient(180deg, #a8e2ff 0%, #4a9bff 45%, #1d56c8 55%, #123a96 100%); box-shadow: 0 0 12px rgba(90, 170, 255, .7); }
+.progress em { color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.out { background: rgba(2, 6, 18, .75); border: 1px solid var(--line); border-radius: 6px; color: #b9c8ea; }
+.btn { font-family: var(--display); font-weight: 600; letter-spacing: .05em; color: var(--steel-hi); background: linear-gradient(180deg, #34508e 0%, #1c2f5e 52%, #14224a 100%); border: 1px solid var(--steel); border-radius: 6px; box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 2px 0 #060b1a; text-shadow: 0 1px 0 rgba(0,0,0,.7); }
+.btn:hover { border-color: var(--accent); filter: brightness(1.12); }
+.btn:active { transform: translateY(1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.2); }
+.btn.primary { color: #2a1c05; background: linear-gradient(180deg, #fff0b8 0%, #e9c46a 48%, #b78a22 52%, #8c6410 100%); border-color: #fbe9a8; text-shadow: 0 1px 0 rgba(255,255,255,.5); font-size: 15px; letter-spacing: .12em; text-transform: uppercase; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { filter: grayscale(.7) brightness(.7); }
+.btn.big { font-size: 14px; }
+.foot { color: var(--muted); border-top: 1px solid rgba(150, 175, 225, .12); }
+dialog { background: linear-gradient(180deg, #11204a, #0a1430); border: 2px solid var(--steel); border-radius: 12px; box-shadow: 0 0 0 2px #060b1a, 0 24px 60px rgba(0,0,0,.7); color: var(--text); }
+dialog h2, dialog h3 { font-family: var(--display); color: var(--accent); letter-spacing: .06em; }
+.toast { background: #101d40; border: 1px solid var(--steel); }
+::-webkit-scrollbar-thumb { background: var(--steel-lo); }

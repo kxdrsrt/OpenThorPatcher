@@ -67,8 +67,9 @@ enum Cmd {
         /// `name=password` for an encrypted GRF, repeatable
         #[arg(long = "grf-password")]
         grf_password: Vec<String>,
+        /// Keep the replaced GRF as <name>.bak (default: the old file is replaced completely)
         #[arg(long)]
-        no_backup: bool,
+        keep_backup: bool,
         #[arg(long)]
         dry_run: bool,
         /// Re-hash every file instead of trusting the cache (repair)
@@ -160,14 +161,14 @@ fn real() -> otp_core::Result<()> {
                 );
             }
         }
-        Cmd::Patch { url, client, pub_key, grf_password, no_backup, dry_run, check, legacy_grf } => {
+        Cmd::Patch { url, client, pub_key, grf_password, keep_backup, dry_run, check, legacy_grf } => {
             let mut cfg = Config::new(url, client);
             for s in grf_password {
                 let (n, p) = s.split_once('=').ok_or_else(|| otp_core::msg("--grf-password needs name=password"))?;
                 cfg.grf_passwords.insert(n.to_string(), p.to_string());
             }
             cfg.pub_key = pub_key;
-            cfg.backup = !no_backup;
+            cfg.backup = keep_backup;
             cfg.dry_run = dry_run;
             cfg.force_check = check;
             cfg.legacy_default_grf = legacy_grf;

@@ -12,7 +12,7 @@ ok() { echo "ok: $*"; }
 for ENC in plain encrypted; do
   D="$W/$ENC"; M="$D/master"; P="$D/player"; S="$D/site"
   mkdir -p "$M/src/data/texture" "$P/oldfolder"
-  PW=""; RP=""; CP=""; PUBPW=""
+  PW=""; RP=""; CP=""; PUBPW=""; PATCHOPT=""
   if [ "$ENC" = encrypted ]; then
     PW="--password secret123 --encrypt"; RP="--password secret123"
     CP="--grf-password data.grf=secret123"; PUBPW="--grf-password secret123"
@@ -83,8 +83,8 @@ EOF
   # shellcheck disable=SC2086
   rgrf extract -q $RP "$M/data.grf" "$D/xm" >/dev/null 2>&1 || fail "$ENC extract master"
   diff -r "$D/xp" "$D/xm" >/dev/null || fail "$ENC patched GRF differs from master"
-  [ -f "$P/data.grf.bak" ] || fail "$ENC no backup"
-  ok "$ENC: patched GRF content == master (changed, new and removed entries), backup kept"
+  [ ! -e "$P/data.grf.bak" ] || fail "$ENC old GRF was kept although --keep-backup was not given"
+  ok "$ENC: patched GRF content == master (changed, new and removed entries), the old GRF is replaced completely (no .bak)"
 
   pat > "$D/p3.log"
   grep -q "0 file(s), 0 patch(es), 0 repaired, 0 removed" "$D/p3.log" || { cat "$D/p3.log"; fail "$ENC up to date run"; }

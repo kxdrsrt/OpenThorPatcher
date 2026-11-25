@@ -7,6 +7,8 @@
 <title>OpenThor Patcher</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="patcher.css">
+<link rel="stylesheet" id="theme-default" href="themes/default/theme.css">
+<style id="theme-custom"></style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -22,37 +24,52 @@
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.5 3 8 7.5 9.5 4.5-1.5 7.5-5 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 17h12"/></symbol>
   </defs>
 </svg>
 
-<div class="shell">
-  <header class="top">
-    <img src="icon.png" alt="" width="30" height="30">
-    <div class="who"><h1 id="name">OpenThor Patcher</h1><span id="sub">Checking for updates…</span></div>
-    <div class="spacer"></div>
-    <button id="btn-settings" class="btn icon" title="Settings" aria-label="Settings"><svg class="ic"><use href="#i-gear"/></svg></button>
-  </header>
-
-  <main class="stage">
-    <section class="news card" aria-label="News">
-      <div id="news-fallback" class="news-empty"><img src="icon.png" alt="" width="64" height="64"><p id="notice">Welcome.</p></div>
-      <iframe id="news-frame" title="News" hidden referrerpolicy="no-referrer" sandbox="allow-scripts allow-popups"></iframe>
-    </section>
-
-    <section class="panel card" aria-label="Status">
-      <div id="state" class="state"><svg class="ic"><use href="#i-update"/></svg><div><b id="state-title">Checking…</b><span id="state-text"></span></div></div>
-      <div id="bar" class="progress indeterminate"><i></i></div>
-      <div class="pline"><span id="p-name" class="mono"></span><span id="p-size" class="mono"></span></div>
-      <pre id="log" class="out" aria-live="polite"></pre>
-      <div class="buttons">
-        <button id="btn-play" class="btn primary big" disabled><svg class="ic"><use href="#i-play"/></svg>Play</button>
-        <button id="btn-update" class="btn big" hidden><svg class="ic"><use href="#i-update"/></svg>Update</button>
-        <button id="btn-cancel" class="btn big" hidden><svg class="ic"><use href="#i-stop"/></svg>Cancel</button>
-        <button id="btn-check" class="btn" title="Re-check every file against the server"><svg class="ic"><use href="#i-shield"/></svg>Check files</button>
-        <button id="btn-setup" class="btn" hidden><svg class="ic"><use href="#i-sliders"/></svg>Setup</button>
+<div class="stage-wrap">
+  <img id="logo" class="logo" src="themes/default/logo.png" alt="OpenThor Patcher" draggable="false" data-tauri-drag-region>
+  <div class="frame">
+    <header class="bar" data-tauri-drag-region>
+      <div class="who" data-tauri-drag-region><span id="name">OpenThor Patcher</span><i id="sub">Checking for updates…</i></div>
+      <div class="wincontrols">
+        <button id="btn-settings" class="wbtn" title="Settings" aria-label="Settings"><svg class="ic"><use href="#i-gear"/></svg></button>
+        <button id="btn-min" class="wbtn" title="Minimize" aria-label="Minimize"><svg class="ic"><use href="#i-min"/></svg></button>
+        <button id="btn-close" class="wbtn close" title="Close" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
       </div>
-    </section>
-  </main>
+    </header>
+
+    <main class="body">
+      <section class="left" aria-label="News and changelog">
+        <div class="tabs" role="tablist" id="tabs">
+          <button role="tab" data-tab="news" class="active">News</button>
+          <button role="tab" data-tab="changelog">Changelog</button>
+          <button role="tab" data-tab="web" id="tab-web" hidden>Website</button>
+        </div>
+        <div class="box">
+          <div id="p-news" class="pane active" role="tabpanel"></div>
+          <div id="p-changelog" class="pane" role="tabpanel"></div>
+          <div id="p-web" class="pane" role="tabpanel"><iframe id="news-frame" title="Website" referrerpolicy="no-referrer" sandbox="allow-scripts allow-popups"></iframe></div>
+        </div>
+      </section>
+
+      <aside class="right" aria-label="Status">
+        <div id="state" class="state"><svg class="ic"><use href="#i-update"/></svg><div><b id="state-title">Checking…</b><span id="state-text"></span></div></div>
+        <div id="bar" class="progress indeterminate" role="progressbar"><i></i><em id="pct"></em></div>
+        <div class="pline"><span id="p-name" class="mono"></span><span id="p-size" class="mono"></span></div>
+        <pre id="log" class="out" aria-live="polite"></pre>
+        <div class="buttons">
+          <button id="btn-play" class="btn primary big" disabled><svg class="ic"><use href="#i-play"/></svg>Play</button>
+          <button id="btn-update" class="btn big" hidden><svg class="ic"><use href="#i-update"/></svg>Update</button>
+          <button id="btn-cancel" class="btn big" hidden><svg class="ic"><use href="#i-stop"/></svg>Cancel</button>
+          <button id="btn-check" class="btn" title="Re-check every file against the server"><svg class="ic"><use href="#i-shield"/></svg>Check files</button>
+          <button id="btn-setup" class="btn" hidden><svg class="ic"><use href="#i-sliders"/></svg>Setup</button>
+        </div>
+      </aside>
+    </main>
+    <footer class="foot"><span id="foot-ver">OpenThor Patcher</span><span id="foot-theme"></span></footer>
+  </div>
 
   <dialog id="dlg" aria-labelledby="dlg-title">
     <form method="dialog">
@@ -60,7 +77,7 @@
       <div class="card form">
         <label class="fld wide"><span>Client folder</span><span class="inline"><input id="s-dir" readonly><button id="s-pick" type="button" class="btn icon" title="Choose folder" aria-label="Choose folder"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
         <label class="switch-row"><span>Update automatically on start</span><span class="switch"><input type="checkbox" id="s-auto"><i></i></span></label>
-        <label class="switch-row"><span>Keep a backup of replaced GRFs<small>needs disk space, lets you go back</small></span><span class="switch"><input type="checkbox" id="s-bak"><i></i></span></label>
+        <label class="switch-row"><span>Keep the old GRF as .bak after an update<small>off by default: the old file is replaced completely</small></span><span class="switch"><input type="checkbox" id="s-bak"><i></i></span></label>
       </div>
       <h3 id="packs-title">Options</h3>
       <div id="packs" class="card form"></div>

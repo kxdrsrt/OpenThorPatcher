@@ -37,6 +37,8 @@ patch list (`kind = "delta"`), never a change of `.thor`.
     { "id": 1, "target": "data.grf", "file": "patches/0001-data.thor", "size": 1234567, "sha256": "…" }
   ],
   "remove": ["old.dll", "oldfolder/*"],
+  "news": [{ "date": "2026-11-25", "title": "Welcome", "body": "The **test server** is open.\n\n- 75x base" }],
+  "changelog": [{ "date": "2026-11-25", "version": "Patch 12", "title": "LGP colours", "items": ["Magnus tiles are red"] }],
   "client": { "exe": "alpha.exe", "args": "-1sak1", "setup_exe": "Setup.exe" },
   "data_ini": {
     "order": ["odin.grf", "@pack:competitive", "cdata.grf", "core.grf", "data.grf"],
@@ -53,7 +55,7 @@ mirror in `base_url` that has it; a full link (`https://…`, `gdrive:ID`, a sha
 [HOSTING.md](HOSTING.md). `remove` paths (relative, no `..`; `dir/*` = folder) are deleted from every client; entries
 inside GRFs are removed by Thor delete directives. `client` says what the Play and Setup buttons start. `data_ini`
 gives the GRF load order; `@pack:<id>` is replaced by the pack's file only when the player switched the pack on (or
-`locked`), and GRFs the player added stay after the managed ones. `notice`/`news_url` fill the patcher's news area.
+`locked`), and GRFs the player added stay after the managed ones. `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)).
 Unknown fields are ignored, so lists can grow without a new schema number.
 
 Not in schema 1 yet: an `odinguard` hook (manifest check after patching).

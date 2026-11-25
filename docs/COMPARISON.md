@@ -14,7 +14,7 @@ its known behaviour and the `.thor`/`plist.txt` formats (*not re-verified*, trea
 | Diff of a big GRF | no (you build the patch) | no | no | **yes, per entry (hash state per target)** |
 | GRF versions | 0x102, 0x103, 0x200 | libgrf-based | 0x200 only (README) | **0x102 – 0x300** |
 | GRF Editor encryption | no | no | no | **yes** |
-| Merge into GRF | in place (append) | repack | in place | **new file → check → atomic swap, `.bak`** |
+| Merge into GRF | in place (append) | repack | in place | **new file → check → atomic swap; the old file is replaced completely (`.bak` only on request)** |
 | Interrupted patch | can leave a broken GRF | can | can | **never touches the GRF until the result checked out** |
 | Delete a file inside a GRF | yes (Thor flag) | yes | yes | **yes** |
 | Delete loose files / folders | no | folder (`path\*`) | no | **yes (`remove` list, `dir/*`)** |

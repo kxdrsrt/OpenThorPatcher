@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use otp_core::launch;
-use otp_core::patchlist::{ClientCfg, PatchList};
+use otp_core::patchlist::{ChangeEntry, ClientCfg, NewsItem, PatchList};
 use otp_core::sync::{self, Config, Event, Summary};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
@@ -103,7 +103,7 @@ fn core_config(app: &tauri::AppHandle, cfg: &Cfg, st: &App) -> Config {
     let mut c = Config::new(cfg.patch_url.clone(), client_dir(app));
     c.list_url = cfg.list_url.clone();
     c.pub_key_hex = Some(cfg.pub_key.clone()).filter(|k| !k.is_empty());
-    c.backup = s.keep_backup.unwrap_or(true);
+    c.backup = s.keep_backup.unwrap_or(false);
     if let Some(g) = &cfg.legacy_grf {
         c.legacy_default_grf = g.clone();
     }
@@ -126,8 +126,8 @@ fn init(app: tauri::AppHandle) -> Init {
     let s = load_settings(&app);
     let version = env!("CARGO_PKG_VERSION").to_string();
     match load_cfg() {
-        Ok(c) => Init { name: c.name, client_dir: client_dir(&app).display().to_string(), auto_update: s.auto_update.unwrap_or(true), keep_backup: s.keep_backup.unwrap_or(true), error: None, version },
-        Err(e) => Init { name: "OpenThor Patcher".into(), client_dir: client_dir(&app).display().to_string(), auto_update: true, keep_backup: true, error: Some(e), version },
+        Ok(c) => Init { name: c.name, client_dir: client_dir(&app).display().to_string(), auto_update: s.auto_update.unwrap_or(true), keep_backup: s.keep_backup.unwrap_or(false), error: None, version },
+        Err(e) => Init { name: "OpenThor Patcher".into(), client_dir: client_dir(&app).display().to_string(), auto_update: true, keep_backup: false, error: Some(e), version },
     }
 }
 
@@ -163,6 +163,8 @@ struct Checked {
     packs: Vec<PackInfo>,
     can_play: bool,
     can_setup: bool,
+    news: Vec<NewsItem>,
+    changelog: Vec<ChangeEntry>,
     summary: Summary,
 }
 
@@ -199,6 +201,8 @@ async fn check(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
             packs,
             can_play: !game.exe.is_empty(),
             can_setup: !game.setup_exe.is_empty(),
+            news: l.as_ref().map(|l| l.news.clone()).unwrap_or_default(),
+            changelog: l.as_ref().map(|l| l.changelog.clone()).unwrap_or_default(),
             summary,
         };
         *st.last.lock().map_err(err)? = l;
@@ -291,12 +295,97 @@ fn setup(app: tauri::AppHandle, st: State<'_, Arc<App>>) -> Res<()> {
     launch::start(&client_dir(&app), &g.setup_exe, "").map_err(err)
 }
 
+#[derive(Deserialize, Default)]
+struct ThemeJson {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    author: String,
+    #[serde(default)]
+    css: Option<String>,
+    #[serde(default)]
+    logo: Option<String>,
+    #[serde(default)]
+    vars: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Serialize)]
+struct Theme {
+    name: String,
+    author: String,
+    css: String,
+    vars: std::collections::BTreeMap<String, String>,
+    logo: Option<String>,
+}
+
+fn data_uri(p: &Path) -> Option<String> {
+    use std::io::Write;
+    let ext = p.extension()?.to_str()?.to_ascii_lowercase();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "woff2" => "font/woff2",
+        "woff" => "font/woff",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        _ => return None,
+    };
+    let bytes = std::fs::read(p).ok().filter(|b| b.len() <= 8 << 20)?;
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len() * 4 / 3 + 8);
+    for c in bytes.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        out.push(T[(n >> 18) as usize & 63]);
+        out.push(T[(n >> 12) as usize & 63]);
+        out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] } else { b'=' });
+        out.push(if c.len() > 2 { T[n as usize & 63] } else { b'=' });
+    }
+    let mut s = format!("data:{mime};base64,").into_bytes();
+    s.write_all(&out).ok()?;
+    String::from_utf8(s).ok()
+}
+
+/// Replaces `url(file)` of files that exist in the theme folder with data URIs, so a theme is just a folder.
+fn inline_urls(css: &str, dir: &Path) -> String {
+    let mut out = String::with_capacity(css.len());
+    let mut rest = css;
+    while let Some(i) = rest.find("url(") {
+        out.push_str(&rest[..i + 4]);
+        rest = &rest[i + 4..];
+        let Some(j) = rest.find(')') else { break };
+        let raw = rest[..j].trim().trim_matches(|c| c == '"' || c == '\'');
+        let local = otp_core::safe_rel(raw).ok().map(|r| dir.join(r));
+        match local.as_deref().and_then(data_uri) {
+            Some(d) => out.push_str(&format!("\"{d}\"")),
+            None => out.push_str(&rest[..j]),
+        }
+        rest = &rest[j..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A theme folder `patcher-theme/` in the client folder (shipped like any other file, so operators can update it through
+/// the patcher itself). `None` = use the built-in Ragnarok theme.
+#[tauri::command]
+fn get_theme(app: tauri::AppHandle) -> Option<Theme> {
+    let dir = client_dir(&app).join("patcher-theme");
+    let j: ThemeJson = serde_json::from_slice(&std::fs::read(dir.join("theme.json")).ok()?).ok()?;
+    let css_file = j.css.unwrap_or_else(|| "theme.css".into());
+    let css = std::fs::read_to_string(dir.join(otp_core::safe_rel(&css_file).ok()?)).unwrap_or_default();
+    let logo = j.logo.and_then(|l| otp_core::safe_rel(&l).ok()).and_then(|l| data_uri(&dir.join(l)));
+    Some(Theme { name: j.name, author: j.author, css: inline_urls(&css, &dir), vars: j.vars, logo })
+}
+
 pub fn run() {
     let state = Arc::new(App { cancel: Arc::new(AtomicBool::new(false)), last: Mutex::new(None), busy: AtomicBool::new(false) });
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
-        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup])
+        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme])
         .run(tauri::generate_context!())
         .expect("error while running OpenThor Patcher");
 }

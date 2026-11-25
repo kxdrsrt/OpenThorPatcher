@@ -243,3 +243,5 @@ pre.out { background: var(--surface); border: 1px solid var(--line); border-radi
 .fld .inline input { flex: 1; }
 .no-project .needs-project { display: none !important; }
 .mono { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+textarea { width: 100%; border-radius: 7px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--text); font: inherit; padding: 6px 9px; resize: vertical; user-select: text; }
+textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

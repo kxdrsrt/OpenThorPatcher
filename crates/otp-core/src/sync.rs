@@ -46,7 +46,7 @@ impl Config {
             pub_key: None,
             pub_key_hex: None,
             grf_passwords: BTreeMap::new(),
-            backup: true,
+            backup: false,
             dry_run: false,
             force_check: false,
             legacy_default_grf: "data.grf".into(),
@@ -195,7 +195,14 @@ fn get(cfg: &Config, list: &PatchList, rel: &str, dest: &Path, size: u64, sha: &
             ev(Event::Download { name: name.clone(), done, total });
             !cfg.cancelled()
         };
-        match download(&join(&base, rel), dest, size, sha, &mut f) {
+        let url = join(&base, rel);
+        // a list fetched over the network must not point the patcher at files on the player's own disk
+        let local_site = cfg.patch_url.starts_with("file://") || cfg.list_url.as_deref().is_some_and(|u| u.starts_with("file://"));
+        if url.starts_with("file://") && !local_site {
+            last = msg(format!("{url}: the patch list asks for a local file, refused"));
+            continue;
+        }
+        match download(&url, dest, size, sha, &mut f) {
             Ok(()) => return Ok(()),
             Err(Error::Cancelled) => return Err(Error::Cancelled),
             Err(e) => last = e,

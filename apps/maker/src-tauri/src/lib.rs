@@ -151,6 +151,31 @@ fn write_text(path: String, text: String) -> Res<()> {
     std::fs::write(&path, text).map_err(err)
 }
 
+const THEME_FILES: &[(&str, &[u8])] = &[
+    ("theme.json", include_bytes!("../../../patcher/ui/themes/default/theme.json")),
+    ("theme.css", include_bytes!("../../../patcher/ui/themes/default/theme.css")),
+    ("logo.png", include_bytes!("../../../patcher/ui/themes/default/logo.png")),
+    ("fonts/Cinzel.ttf", include_bytes!("../../../patcher/ui/themes/default/fonts/Cinzel.ttf")),
+    ("fonts/OFL.txt", include_bytes!("../../../patcher/ui/themes/default/fonts/OFL.txt")),
+];
+
+/// Writes the built-in theme into `<dir>/patcher-theme/` as a starting point for an own theme.
+#[tauri::command]
+fn export_theme(dir: String) -> Res<String> {
+    let root = Path::new(&dir).join("patcher-theme");
+    if root.exists() {
+        return Err(format!("{} exists; rename or remove it first", root.display()));
+    }
+    for (name, bytes) in THEME_FILES {
+        let p = root.join(name);
+        if let Some(d) = p.parent() {
+            std::fs::create_dir_all(d).map_err(err)?;
+        }
+        std::fs::write(&p, bytes).map_err(err)?;
+    }
+    Ok(root.display().to_string())
+}
+
 #[tauri::command]
 fn reveal(path: String) -> Res<()> {
     let p = Path::new(&path);
@@ -181,6 +206,7 @@ pub fn run() {
             site_status,
             patcher_config,
             write_text,
+            export_theme,
             reveal,
         ])
         .run(tauri::generate_context!())

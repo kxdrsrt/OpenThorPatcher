@@ -144,6 +144,8 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     list.remove = p.remove.iter().map(|r| norm(r)).collect();
     list.client = p.game.clone();
     list.data_ini = p.data_ini.clone();
+    list.news = p.news.clone();
+    list.changelog = p.changelog.clone();
     let mut rep = PublishReport { dry_run, ..Default::default() };
     let plan = |rep: &mut PublishReport, kind: &str, name: &str, detail: String, size: u64| {
         rep.plan.push(PlanItem { kind: kind.into(), name: name.into(), detail, size });

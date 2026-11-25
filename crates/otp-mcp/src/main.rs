@@ -57,7 +57,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "otp_project_update",
         title: "Change a project",
-        description: "Merges the given fields into the project file. Allowed keys: server, base_urls, thor, sync, remove, signing_seed, full, news_url, notice, game {exe,args,setup_exe}, data_ini {order,packs[{id,file,title,default,locked}]}, url_map {site path: full link}, allow_patching, message.",
+        description: "Merges the given fields into the project file. Allowed keys: server, base_urls, thor, sync, remove, signing_seed, full, news_url, notice, game {exe,args,setup_exe}, news [{date,title,body}], changelog [{date,version,title,items[]}], data_ini {order,packs[{id,file,title,default,locked}]}, url_map {site path: full link}, allow_patching, message.",
         writes: true,
         params: &[
             ("project", "string", "Path of otp-project.json", true),
@@ -197,7 +197,7 @@ fn call(name: &str, a: &Value) -> Result<Value, String> {
             let ch = a.get("changes").and_then(Value::as_object).ok_or("changes must be an object")?;
             const ALLOWED: &[&str] = &[
                 "server", "base_urls", "thor", "sync", "remove", "signing_seed", "full", "news_url", "notice", "game", "data_ini", "url_map",
-                "allow_patching", "message",
+                "allow_patching", "message", "news", "changelog",
             ];
             for (k, val) in ch {
                 if !ALLOWED.contains(&k.as_str()) {
