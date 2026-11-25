@@ -1,0 +1,25 @@
+[package]
+name = "openthor-patcher"
+description = "OpenThor Patcher (Tauri 2): the player's patcher window"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+name = "openthor_patcher_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "openthor-patcher"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.7.5", features = [] }
+
+[dependencies]
+otp-core = { path = "../../../crates/otp-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.12.6", features = [] }
+tauri-plugin-dialog = "2.8.4"

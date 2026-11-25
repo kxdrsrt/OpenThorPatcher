@@ -1,6 +1,6 @@
 [package]
 name = "otp-core"
-description = "OpenThorPatcher core: patch list, download, verified apply, publish"
+description = "OpenThor Patcher core: patch list, download, verified apply, publish"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -5,7 +5,7 @@ Labels: **[gelesen]** read in sources or docs, **[gemessen]** measured on files,
 
 ## 1. Why not rpatchur, why not Thor Patcher
 
-| | Thor Patcher 2.6.4.13 | rpatchur (L1nkZ) | OpenThorPatcher |
+| | Thor Patcher 2.6.4.13 | rpatchur (L1nkZ) | OpenThor Patcher |
 |---|---|---|---|
 | State | abandoned, closed source (Delphi), last release 2016 **[gemessen]** (Changelog) | Rust, Apache-2.0/MIT, last push 2024-05, 57 stars **[gelesen]** (GitHub) | new |
 | Patch formats | `.thor` (+ GRF 0x102/0x103/0x200 input) | `.thor`, GRF 0x101-0x200 **[gelesen]** | `.thor`, plus GPF/RGZ read via RustyGRF |

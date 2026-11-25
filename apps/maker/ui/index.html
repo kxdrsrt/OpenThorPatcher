@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>OpenThor Patch Maker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="no-project">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-project" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-files" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-remove" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-players" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0M16 5.2a3.2 3.2 0 0 1 0 5.6M18 14.5a6 6 0 0 1 3 5.5"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></symbol>
+    <symbol id="i-publish" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.8 2.8L16 9.5"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.5v.01"/></symbol>
+    <symbol id="i-error" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l3 3M14 9l2 2"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-patch" viewBox="0 0 24 24"><path d="M13 3 5 13h6l-1 8 8-10h-6z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <aside class="sidebar" aria-label="Sections">
+    <div class="brand">
+      <img src="icon.png" alt="" width="34" height="34">
+      <div><b>OpenThor</b><span>Patch Maker <i id="ver"></i></span></div>
+    </div>
+    <nav id="nav">
+      <div class="nav-group">Set up</div>
+      <button data-tab="project" class="active"><svg class="ic"><use href="#i-project"/></svg>Project</button>
+      <button data-tab="files"><svg class="ic"><use href="#i-files"/></svg>Files</button>
+      <button data-tab="remove"><svg class="ic"><use href="#i-remove"/></svg>Removals</button>
+      <div class="nav-group">Players</div>
+      <button data-tab="players"><svg class="ic"><use href="#i-players"/></svg>Game &amp; DATA.INI</button>
+      <button data-tab="hosting"><svg class="ic"><use href="#i-cloud"/></svg>Hosting</button>
+      <div class="nav-group">Release</div>
+      <button data-tab="publish"><svg class="ic"><use href="#i-publish"/></svg>Publish</button>
+    </nav>
+  </aside>
+
+  <div class="content">
+    <header class="toolbar">
+      <div class="title"><h1 id="page-title">Project</h1><span id="path" class="path" title="">No project open</span></div>
+      <span id="dirty" class="pill warn" hidden><svg class="ic"><use href="#i-warn"/></svg>Unsaved</span>
+      <div class="spacer"></div>
+      <button id="btn-new" class="btn"><svg class="ic"><use href="#i-plus"/></svg>New</button>
+      <button id="btn-open" class="btn"><svg class="ic"><use href="#i-open"/></svg>Open</button>
+      <button id="btn-save" class="btn primary" disabled><svg class="ic"><use href="#i-save"/></svg>Save</button>
+    </header>
+
+    <main id="main">
+      <div id="welcome" class="empty">
+        <img src="icon.png" alt="" width="72" height="72">
+        <h2>Publish your client</h2>
+        <p>Keep one master client up to date. The Patch Maker compares it with what you published last time and writes only the difference: numbered Thor patches for big GRFs, whole files for small ones, a signed patch list. Players update from that.</p>
+        <div class="row center">
+          <button id="btn-new2" class="btn primary"><svg class="ic"><use href="#i-plus"/></svg>New project</button>
+          <button id="btn-open2" class="btn"><svg class="ic"><use href="#i-open"/></svg>Open project</button>
+        </div>
+      </div>
+
+      <section id="tab-project" class="tab active needs-project">
+        <p class="lead">The master client is the folder you maintain. The patch site is a folder the Patch Maker writes; you upload it to your host.</p>
+        <div id="status-stats" class="stat"></div>
+        <div class="card form">
+          <label class="fld"><span>Server name</span><input id="f-server"></label>
+          <label class="fld wide"><span>Master client folder</span><span class="inline"><input id="f-client"><button class="btn icon pick" data-for="f-client" data-dir="1" title="Choose folder" aria-label="Choose master client folder"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+          <label class="fld wide"><span>Patch site folder (output)</span><span class="inline"><input id="f-site"><button class="btn icon pick" data-for="f-site" data-dir="1" title="Choose folder" aria-label="Choose patch site folder"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+        </div>
+        <h3>Signing key</h3>
+        <div class="card form">
+          <p class="note wide" style="margin:0">Players check every patch list against your public key, so nobody else can send them files. The secret key stays on this computer.</p>
+          <label class="fld wide"><span>Secret key file (signing.seed)</span><span class="inline"><input id="f-seed"><button class="btn icon pick" data-for="f-seed" title="Choose file" aria-label="Choose key file"><svg class="ic"><use href="#i-open"/></svg></button><button id="btn-keygen" class="btn"><svg class="ic"><use href="#i-key"/></svg>Create key pair…</button></span></label>
+          <label class="fld wide"><span>Public key (goes into the player's patcher.json)</span><input id="f-pub" readonly></label>
+        </div>
+        <h3>Options</h3>
+        <div class="card form">
+          <label class="switch-row"><span>Also publish whole GRFs<small>lets a damaged client repair itself without reinstalling; needs the disk space on your host</small></span><span class="switch"><input type="checkbox" id="f-full"><i></i></span></label>
+        </div>
+      </section>
+
+      <section id="tab-files" class="tab needs-project">
+        <p class="lead">Decide how each file reaches players. <b>Patch entries</b> is for big GRFs: only the files inside that changed are sent. <b>Sync whole</b> sends the file again when its hash changes (good below ~50 MB). <b>Ignore</b> keeps it out.</p>
+        <div class="row"><button id="btn-scan" class="btn"><svg class="ic"><use href="#i-scan"/></svg>Rescan master client</button><span id="scan-summary" class="muted"></span></div>
+        <div class="table-wrap"><table id="files"></table></div>
+      </section>
+
+      <section id="tab-remove" class="tab needs-project">
+        <p class="lead">Paths deleted from every player's client on the next update. Use <code>folder/*</code> for a whole folder. Files <em>inside</em> a GRF are removed by simply deleting them in the master GRF; the next publish sends a delete.</p>
+        <div id="remove-list" class="list"></div>
+        <div class="inline-add"><input id="remove-new" placeholder="old/file.dll  or  oldfolder/*" aria-label="Path to remove"><button id="btn-remove-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add</button></div>
+        <p class="note">Paths are relative to the client folder. Anything outside it is refused.</p>
+      </section>
+
+      <section id="tab-players" class="tab needs-project">
+        <p class="lead">What the player's patcher shows and does after patching.</p>
+        <h3>Game</h3>
+        <div class="card form">
+          <label class="fld"><span>Game program</span><input id="g-exe" placeholder="ragexe.exe"></label>
+          <label class="fld"><span>Arguments</span><input id="g-args" placeholder="-1rag1"></label>
+          <label class="fld"><span>Setup program</span><input id="g-setup" placeholder="Setup.exe"></label>
+        </div>
+        <h3>News</h3>
+        <div class="card form">
+          <label class="fld wide"><span>News page (shown inside the patcher)</span><input id="n-url" placeholder="https://example.com/news"></label>
+          <label class="fld wide"><span>Short notice (shown when there is no news page)</span><input id="n-notice"></label>
+        </div>
+        <h3>DATA.INI</h3>
+        <p class="note" style="margin:0 0 10px">The patcher writes the GRF load order. Put <code>@pack:&lt;id&gt;</code> where an optional pack goes; it is replaced by the pack's file only when the player has the pack switched on. GRFs players added themselves stay after yours.</p>
+        <div class="card"><div id="order-list" class="list"></div>
+          <div class="inline-add"><input id="order-new" placeholder="data.grf  or  @pack:competitive" aria-label="GRF or pack"><button id="btn-order-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add</button></div></div>
+        <h3>Optional packs</h3>
+        <div class="table-wrap"><table id="packs"></table></div>
+        <div class="inline-add"><button id="btn-pack-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add pack</button></div>
+        <h3>Maintenance</h3>
+        <div class="card form">
+          <label class="switch-row"><span>Patching open<small>switch off to stop players updating (they see your message)</small></span><span class="switch"><input type="checkbox" id="m-open"><i></i></span></label>
+          <label class="fld wide"><span>Message while closed</span><input id="m-msg" placeholder="Maintenance until 18:00 UTC"></label>
+        </div>
+      </section>
+
+      <section id="tab-hosting" class="tab needs-project">
+        <p class="lead">Players download from your mirrors. Any static host works: your own server, S3 / Cloudflare R2, GitHub Releases. Cloud drives (Google Drive, Dropbox, OneDrive) give every file its own share link; paste them below.</p>
+        <h3>Mirrors</h3>
+        <div class="card"><div id="mirror-list" class="list"></div>
+          <div class="inline-add"><input id="mirror-new" placeholder="https://patch.example.com/" aria-label="Mirror URL"><button id="btn-mirror-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add mirror</button></div>
+          <p class="note">The first mirror is tried first; the others are used when it fails. Folder structure of the site is kept (<code>files/…</code>, <code>patches/…</code>).</p></div>
+        <h3>Cloud links</h3>
+        <div class="warnbox" id="cloud-warn"><b>Cloud drives are the fragile option.</b> Large files can hit download quotas or return a web page instead of the file; the patcher then stops with a clear message. Use them for small communities, and prefer a static host for anything big. Links are converted to direct downloads automatically.</div>
+        <div class="row"><button id="btn-refresh-files" class="btn"><svg class="ic"><use href="#i-scan"/></svg>Refresh file list</button><span class="muted" id="links-summary"></span></div>
+        <div class="table-wrap"><table id="links"></table></div>
+        <h3>Player config</h3>
+        <p class="note" style="margin:0 0 10px">Ship this next to the player's OpenThor Patcher (<code>patcher.json</code>). It carries your public key.</p>
+        <div class="card form">
+          <label class="fld wide"><span>Patch list link (only if the list itself is a cloud share link)</span><input id="list-url" placeholder="optional"></label>
+          <div class="row wide"><button id="btn-cfg-save" class="btn"><svg class="ic"><use href="#i-save"/></svg>Save patcher.json…</button><button id="btn-cfg-copy" class="btn"><svg class="ic"><use href="#i-copy"/></svg>Copy</button></div>
+          <pre id="cfg-out" class="out wide"></pre>
+        </div>
+      </section>
+
+      <section id="tab-publish" class="tab needs-project">
+        <p class="lead">Preview shows exactly what would change; nothing is written. Publish writes the site folder. The first publish of a GRF only records its current state as the starting point players must have.</p>
+        <div class="row">
+          <button id="btn-plan" class="btn"><svg class="ic"><use href="#i-eye"/></svg>Preview changes</button>
+          <button id="btn-publish" class="btn primary"><svg class="ic"><use href="#i-publish"/></svg>Publish</button>
+          <button id="btn-reveal" class="btn"><svg class="ic"><use href="#i-open"/></svg>Show site folder</button>
+          <label class="fld" style="margin-left:auto;min-width:220px"><span>GRF password (if the master GRFs are encrypted)</span><input id="p-pass" type="password" autocomplete="off"></label>
+        </div>
+        <div id="busy" class="progress indeterminate" hidden><i></i></div>
+        <div id="plan-wrap" hidden><h3>Changes</h3><div class="table-wrap"><table id="plan"></table></div></div>
+        <h3>Log</h3>
+        <pre id="log" class="out">Nothing yet.</pre>
+      </section>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

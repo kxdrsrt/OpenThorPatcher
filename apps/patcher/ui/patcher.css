@@ -1,0 +1,31 @@
+/* OpenThor Patcher window: a news area and one status panel; everything else is a dialog. */
+body { overflow: hidden; }
+.shell { display: flex; flex-direction: column; height: 100%; position: relative; }
+.top { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--side); backdrop-filter: blur(24px) saturate(160%); border-bottom: 1px solid var(--line); }
+.who h1 { font-size: 16px; }
+.who span { display: block; font-size: 12px; color: var(--muted); }
+.stage { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 16px; padding: 16px 20px 20px; }
+.news { padding: 0; overflow: hidden; display: flex; }
+.news iframe { flex: 1; border: 0; width: 100%; height: 100%; background: #fff; }
+.news-empty { margin: auto; text-align: center; max-width: 320px; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; color: var(--muted); }
+.panel { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.state { display: flex; gap: 12px; align-items: flex-start; }
+.state .ic { width: 22px; height: 22px; margin-top: 2px; color: var(--accent); }
+.state b { display: block; font-size: 15px; letter-spacing: -.01em; }
+.state span { color: var(--muted); font-size: 12px; }
+.state.ok .ic { color: var(--ok); } .state.bad .ic { color: var(--danger); } .state.warn .ic { color: var(--warn); }
+.state.busy .ic { animation: spin 1.2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pline { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); min-height: 18px; }
+.pline span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#log { flex: 1; min-height: 60px; font-size: 11px; padding: 8px 10px; margin: 0; }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn.big { min-height: 38px; padding: 6px 22px; font-size: 14px; flex: 1; }
+.progress { height: 10px; }
+.progress i { transition: width .15s linear; }
+dialog { border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); color: var(--text); padding: 0; width: min(520px, calc(100% - 40px)); box-shadow: var(--shadow); }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog form { padding: 16px 18px 18px; }
+dialog header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+dialog h3 { margin-top: 18px; }
+@media (max-width: 860px) { .stage { grid-template-columns: 1fr; grid-template-rows: minmax(120px, 1fr) auto; } }

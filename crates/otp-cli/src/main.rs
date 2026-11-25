@@ -1,11 +1,12 @@
 use clap::{Parser, Subcommand};
-use otp_core::publish::{publish, PublishOptions};
-use otp_core::sync::{run, Config, Event};
+use otp_core::project::{scan_client, Project, Suggest};
+use otp_core::publish::publish;
+use otp_core::sync::{run, set_pack, Config, Event};
 use otp_core::{apply::GrfKey, sign};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "otp", version, about = "OpenThorPatcher: publish a master client, patch player clients")]
+#[command(name = "otp", version, about = "OpenThor Patcher: publish a master client, patch player clients")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -18,37 +19,45 @@ enum Cmd {
         #[arg(long, default_value = ".")]
         out: PathBuf,
     },
-    /// Build or update a patch site from a master client folder
-    Publish {
+    /// List the master client folder with a suggestion per file (thor / sync / ignore)
+    Scan {
+        #[arg(long)]
+        client: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create a project file from a master client folder (big GRFs become Thor targets, small files are synced)
+    Init {
+        #[arg(long)]
+        project: PathBuf,
+        #[arg(long)]
+        server: String,
         #[arg(long)]
         client: PathBuf,
         #[arg(long)]
         site: PathBuf,
-        #[arg(long)]
-        server: String,
-        /// Mirror base URL, repeatable (first one is tried first)
-        #[arg(long = "base-url", required = true)]
+        /// Mirror base URL, repeatable
+        #[arg(long = "base-url")]
         base_url: Vec<String>,
-        /// GRF patched entry by entry with Thor patches, relative to the client, repeatable
-        #[arg(long = "thor")]
-        thor: Vec<String>,
-        /// File synced whole by hash (small GRFs, dll, exe), relative to the client, repeatable
-        #[arg(long = "sync")]
-        sync: Vec<String>,
         #[arg(long)]
         seed: Option<PathBuf>,
+    },
+    /// Build or update the patch site of a project (only changed entries become a new numbered .thor)
+    Publish {
+        #[arg(long)]
+        project: PathBuf,
+        /// Show what would be published, write nothing
+        #[arg(long)]
+        dry_run: bool,
         /// Password of encrypted master GRFs
         #[arg(long)]
         grf_password: Option<String>,
-        /// Also publish whole GRFs for repair
         #[arg(long)]
-        full: bool,
-        /// Close patching with this message (maintenance)
-        #[arg(long)]
-        closed: Option<String>,
+        json: bool,
     },
     /// Update a client folder from a patch site
     Patch {
+        /// Folder URL of the patch site (http(s):// or file://)
         #[arg(long)]
         url: String,
         #[arg(long)]
@@ -62,6 +71,25 @@ enum Cmd {
         no_backup: bool,
         #[arg(long)]
         dry_run: bool,
+        /// Re-hash every file instead of trusting the cache (repair)
+        #[arg(long)]
+        check: bool,
+        /// GRF a classic Thor patch without a target goes to
+        #[arg(long, default_value = "data.grf")]
+        legacy_grf: String,
+    },
+    /// Switch an optional pack on or off for this client and rewrite DATA.INI
+    Pack {
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        client: PathBuf,
+        #[arg(long)]
+        id: String,
+        #[arg(long, conflicts_with = "off")]
+        on: bool,
+        #[arg(long)]
+        off: bool,
     },
 }
 
@@ -72,49 +100,105 @@ fn main() {
     }
 }
 
+fn human(n: u64) -> String {
+    let u = ["B", "KB", "MB", "GB"];
+    let (mut v, mut i) = (n as f64, 0);
+    while v >= 1024.0 && i < 3 {
+        v /= 1024.0;
+        i += 1;
+    }
+    format!("{v:.1} {}", u[i])
+}
+
 fn real() -> otp_core::Result<()> {
     match Cli::parse().cmd {
         Cmd::Keygen { out } => {
             sign::keygen(&out)?;
             println!("wrote {}/signing.seed (keep secret) and patcher.pub", out.display());
         }
-        Cmd::Publish { client, site, server, base_url, thor, sync, seed, grf_password, full, closed } => {
-            let key = GrfKey::from_password(grf_password.as_deref())?.0;
-            let o = PublishOptions {
-                client,
-                site,
-                server,
-                base_urls: base_url,
-                thor_targets: thor,
-                sync_files: sync,
-                signing_seed: seed,
-                grf_key: key,
-                full,
-                allow_patching: closed.is_none(),
-                message: closed,
-            };
-            let r = publish(&o, &mut |s| println!("{s}"))?;
-            println!("done: {} patch(es), {} file(s) updated, {} baseline(s)", r.patches_added.len(), r.files_updated.len(), r.baselines.len());
+        Cmd::Scan { client, json } => {
+            let items = scan_client(&client)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&items)?);
+            } else {
+                for i in items {
+                    println!("{:7} {:>10}  {}", format!("{:?}", i.suggest).to_lowercase(), human(i.size), i.path);
+                }
+            }
         }
-        Cmd::Patch { url, client, pub_key, grf_password, no_backup, dry_run } => {
-            let mut pw = std::collections::BTreeMap::new();
+        Cmd::Init { project, server, client, site, base_url, seed } => {
+            let mut p = Project::new(&server, client.clone(), site);
+            p.base_urls = base_url;
+            p.signing_seed = seed;
+            for i in scan_client(&client)? {
+                match i.suggest {
+                    Suggest::Thor => p.thor.push(i.path),
+                    Suggest::Sync => p.sync.push(i.path),
+                    Suggest::Ignore => {}
+                }
+            }
+            p.save(&project)?;
+            println!("wrote {} ({} GRF target(s), {} synced file(s)); edit it, then run `otp publish --project`", project.display(), p.thor.len(), p.sync.len());
+        }
+        Cmd::Publish { project, dry_run, grf_password, json } => {
+            let p = Project::load(&project)?;
+            let key = GrfKey::from_password(grf_password.as_deref())?.0;
+            let r = publish(&p, key, dry_run, &mut |s| {
+                if !json {
+                    println!("{s}")
+                }
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+            } else {
+                println!(
+                    "{}: {} patch(es), {} file(s) updated, {} baseline(s)",
+                    if dry_run { "dry run" } else { "done" },
+                    r.patches_added.len(),
+                    r.files_updated.len(),
+                    r.baselines.len()
+                );
+            }
+        }
+        Cmd::Patch { url, client, pub_key, grf_password, no_backup, dry_run, check, legacy_grf } => {
+            let mut cfg = Config::new(url, client);
             for s in grf_password {
                 let (n, p) = s.split_once('=').ok_or_else(|| otp_core::msg("--grf-password needs name=password"))?;
-                pw.insert(n.to_string(), p.to_string());
+                cfg.grf_passwords.insert(n.to_string(), p.to_string());
             }
-            let cfg = Config { patch_url: url, client_dir: client, pub_key, grf_passwords: pw, backup: !no_backup, dry_run };
+            cfg.pub_key = pub_key;
+            cfg.backup = !no_backup;
+            cfg.dry_run = dry_run;
+            cfg.force_check = check;
+            cfg.legacy_default_grf = legacy_grf;
             let mut last = 0u64;
             let s = run(&cfg, &mut |e| match e {
                 Event::Info(s) => println!("{s}"),
                 Event::Download { name, done, total } => {
                     if done == total || done.saturating_sub(last) > 8 << 20 {
-                        println!("  {name}: {done}/{total}");
+                        println!("  {name}: {}/{}", human(done), human(total));
                         last = done;
                     }
                 }
                 Event::Applied { target, id } => println!("  {target}: patch {id} applied"),
+                Event::Removed(p) => println!("  removed {p}"),
             })?;
-            println!("done: {} file(s), {} patch(es), {} repaired", s.files_updated.len(), s.patches_applied.len(), s.repaired.len());
+            println!(
+                "done: {} file(s), {} patch(es), {} repaired, {} removed{}",
+                s.files_updated.len(),
+                s.patches_applied.len(),
+                s.repaired.len(),
+                s.removed.len(),
+                if s.data_ini_written { ", DATA.INI updated" } else { "" }
+            );
+        }
+        Cmd::Pack { url, client, id, on, off } => {
+            if !on && !off {
+                return Err(otp_core::msg("give --on or --off"));
+            }
+            let cfg = Config::new(url, client);
+            let changed = set_pack(&cfg, &id, on)?;
+            println!("pack {id} {}; DATA.INI {}", if on { "on" } else { "off" }, if changed { "updated" } else { "unchanged" });
         }
     }
     Ok(())

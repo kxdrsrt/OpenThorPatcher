@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Pick folders and files through the system dialog","local":true,"windows":["*"],"permissions":["core:default","core:event:default","dialog:allow-open","dialog:allow-save"]}}

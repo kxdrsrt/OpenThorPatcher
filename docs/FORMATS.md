@@ -2,7 +2,7 @@
 
 ## 1. The patch container: keep `.thor`
 
-[Entscheidung] OpenThorPatcher uses **Thor patches (`.thor`)** as the only patch container. No new container.
+[Entscheidung] OpenThor Patcher uses **Thor patches (`.thor`)** as the only patch container. No new container.
 
 Why not a new extension (`.othor`, `.patch`, `.gpf`)?
 
@@ -24,33 +24,44 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "updated": "2026-11-25T03:00:00Z",
   "allow_patching": true,
   "message": "",
+  "notice": "Welcome back!",
+  "news_url": "https://example.com/news",
   "base_url": ["https://patch.example.com/", "https://mirror.example.net/patch/"],
   "files": [
-    { "path": "odin.grf", "size": 3057437, "sha256": "…", "url": "files/odin.grf" },
-    { "path": "odinguard.dll", "size": 123456, "sha256": "…", "url": "files/odinguard.dll" }
+    { "path": "odin.grf", "size": 3057437, "sha256": "…", "url": "files/odin.grf" }
   ],
   "targets": {
     "data.grf": { "baseline_sha256": "…", "full": { "path": "data.grf", "size": 0, "sha256": "…", "url": "files/data.grf" }, "full_id": 7 }
   },
   "patches": [
     { "id": 1, "target": "data.grf", "file": "patches/0001-data.thor", "size": 1234567, "sha256": "…" }
-  ]
+  ],
+  "remove": ["old.dll", "oldfolder/*"],
+  "client": { "exe": "alpha.exe", "args": "-1sak1", "setup_exe": "Setup.exe" },
+  "data_ini": {
+    "order": ["odin.grf", "@pack:competitive", "cdata.grf", "core.grf", "data.grf"],
+    "packs": [{ "id": "competitive", "file": "odin-dark.grf", "title": "Competitive visuals", "default": true, "locked": false }]
+  }
 }
 ```
 
 *Implemented (schema 1).* `files` are kept equal to the master by hash (small GRFs, dll, exe). `targets` are big GRFs
 patched entry by entry: `baseline_sha256` is the version patch 0 starts from (what a fresh client package contains),
 `full` is an optional whole copy for repair and `full_id` the patch id it corresponds to. `patches` are applied in id
-order; ids are assigned by `otp publish`, nobody names or numbers them. A relative `url` is appended to the first
-mirror in `base_url` that has the file.
+order; ids are assigned by `otp publish`, nobody names or numbers them. A relative `url`/`file` is appended to the first
+mirror in `base_url` that has it; a full link (`https://…`, `gdrive:ID`, a share link) is used as it is, see
+[HOSTING.md](HOSTING.md). `remove` paths (relative, no `..`; `dir/*` = folder) are deleted from every client; entries
+inside GRFs are removed by Thor delete directives. `client` says what the Play and Setup buttons start. `data_ini`
+gives the GRF load order; `@pack:<id>` is replaced by the pack's file only when the player switched the pack on (or
+`locked`), and GRFs the player added stay after the managed ones. `notice`/`news_url` fill the patcher's news area.
+Unknown fields are ignored, so lists can grow without a new schema number.
 
-Planned for later milestones (not in schema 1 yet): `client` (exe + args), `data_ini` (order, optional packs such as
-the competitive pack with a per-player switch) and `odinguard` (manifest hook).
+Not in schema 1 yet: an `odinguard` hook (manifest check after patching).
 
 * The file is signed with Ed25519 (`patchlist.json.sig`); the public key ships with the patcher. An unsigned or
   wrongly signed list is refused unless the operator switched signatures off in `config.toml` (development only).
 * `plist.txt` (Thor Patcher: `id name.thor`, `//` comments) is still read when there is no `patchlist.json`; hashes
-  and signatures do not exist there, so the patcher warns once.
+  and signatures do not exist there, so those downloads cannot be verified (the patcher says so in the log).
 
 ## 3. `DATA.INI`
 

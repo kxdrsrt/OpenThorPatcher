@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/otp-core", "crates/otp-cli"]
+members = ["crates/otp-core", "crates/otp-cli", "crates/otp-mcp", "apps/maker/src-tauri", "apps/patcher/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

@@ -21,9 +21,15 @@ pub struct PatchList {
     pub allow_patching: bool,
     #[serde(default)]
     pub message: String,
+    /// Short text shown in the patcher window.
+    #[serde(default)]
+    pub notice: String,
+    /// Web page shown in the patcher window (news).
+    #[serde(default)]
+    pub news_url: String,
     /// Mirrors; a relative `url` is appended to the first one that works.
     pub base_url: Vec<String>,
-    /// Whole files kept equal to the master by hash (small GRFs, dll, exe, DATA.INI managed separately).
+    /// Whole files kept equal to the master by hash (small GRFs, dll, exe).
     #[serde(default)]
     pub files: Vec<FileEntry>,
     /// Big GRFs that are patched entry by entry with Thor patches.
@@ -32,6 +38,48 @@ pub struct PatchList {
     /// Thor patches in the order they must be applied (ids grow).
     #[serde(default)]
     pub patches: Vec<PatchEntry>,
+    /// Paths deleted from the client folder (`dir/*` removes a folder). Entries inside GRFs are removed by Thor patches.
+    #[serde(default)]
+    pub remove: Vec<String>,
+    #[serde(default)]
+    pub client: Option<ClientCfg>,
+    #[serde(default)]
+    pub data_ini: Option<DataIniCfg>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ClientCfg {
+    /// Game executable, relative to the client folder.
+    #[serde(default)]
+    pub exe: String,
+    #[serde(default)]
+    pub args: String,
+    /// Setup program (resolution, sound), relative to the client folder.
+    #[serde(default)]
+    pub setup_exe: String,
+}
+
+/// The patcher owns the `[Data]` list of `DATA.INI`. `order` may contain `@pack:<id>`, replaced by the pack's GRF
+/// only when the player has the pack switched on (or the server locks it).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DataIniCfg {
+    pub order: Vec<String>,
+    #[serde(default)]
+    pub packs: Vec<Pack>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Pack {
+    pub id: String,
+    pub file: String,
+    #[serde(default)]
+    pub title: String,
+    /// Switched on for a new player.
+    #[serde(default)]
+    pub default: bool,
+    /// The player cannot switch it off.
+    #[serde(default)]
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,7 +88,7 @@ pub struct FileEntry {
     pub path: String,
     pub size: u64,
     pub sha256: String,
-    /// Relative to a base URL; default `files/<path>`.
+    /// Relative to a base URL or a full link (cloud share link); default `files/<path>`.
     #[serde(default)]
     pub url: String,
 }
@@ -65,6 +113,9 @@ pub struct PatchEntry {
     pub size: u64,
     /// SHA-256 of the downloaded `.thor`.
     pub sha256: String,
+    /// Full link instead of `file` relative to a mirror (cloud share link).
+    #[serde(default)]
+    pub url: String,
 }
 
 impl PatchList {
@@ -84,7 +135,7 @@ impl PatchList {
 /// Thor Patcher's legacy `plist.txt`: `<id> <file>` per line, `//` comments. Returns (id, file name).
 pub fn parse_plist_txt(text: &str) -> Vec<(u32, String)> {
     text.lines()
-        .map(|l| l.trim())
+        .map(|l| l.trim().trim_start_matches('\u{feff}'))
         .filter(|l| !l.is_empty() && !l.starts_with("//"))
         .filter_map(|l| {
             let mut it = l.splitn(2, char::is_whitespace);

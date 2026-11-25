@@ -1,4 +1,4 @@
-//! OpenThorPatcher core.
+//! OpenThor Patcher core.
 //!
 //! * [`patchlist`]: the signed `patchlist.json` (whole files by hash, Thor patches by id)
 //! * [`fetch`]: resumable download with SHA-256 check (`http(s)://` and `file://`)
@@ -7,8 +7,12 @@
 //! * [`sign`]: Ed25519 signing of the patch list
 
 pub mod apply;
+pub mod dataini;
 pub mod fetch;
+pub mod launch;
 pub mod patchlist;
+pub mod project;
+pub mod providers;
 pub mod publish;
 pub mod sign;
 pub mod sync;
@@ -28,6 +32,11 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("http: {0}")]
     Http(#[from] reqwest::Error),
+    /// The file does not exist on the server (HTTP 404, missing file://).
+    #[error("not found: {0}")]
+    NotFound(String),
+    #[error("cancelled")]
+    Cancelled,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -59,4 +68,42 @@ pub fn sha256_file(path: &Path) -> Result<String> {
 pub fn sha256_bytes(b: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     hex::encode(Sha256::digest(b))
+}
+
+/// A path from a patch list or a Thor patch, made safe to join below a root: relative, no `..`, no drive letter.
+pub fn safe_rel(p: &str) -> Result<std::path::PathBuf> {
+    let norm = p.replace('\\', "/");
+    let norm = norm.trim_start_matches("./");
+    if norm.is_empty() || norm.starts_with('/') || norm.contains(':') {
+        return Err(msg(format!("unsafe path in patch data: {p:?}")));
+    }
+    let mut out = std::path::PathBuf::new();
+    for part in norm.split('/') {
+        if part.is_empty() || part == "." {
+            continue;
+        }
+        if part == ".." {
+            return Err(msg(format!("unsafe path in patch data: {p:?}")));
+        }
+        out.push(part);
+    }
+    if out.as_os_str().is_empty() {
+        return Err(msg(format!("unsafe path in patch data: {p:?}")));
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_rel_rejects_escapes() {
+        assert!(safe_rel("../x").is_err());
+        assert!(safe_rel("a/../../x").is_err());
+        assert!(safe_rel("/etc/passwd").is_err());
+        assert!(safe_rel("C:\\Windows\\x").is_err());
+        assert!(safe_rel("").is_err());
+        assert_eq!(safe_rel("data\\a\\b.txt").unwrap(), std::path::PathBuf::from("data/a/b.txt"));
+    }
 }

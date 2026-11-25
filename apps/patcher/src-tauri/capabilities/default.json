@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Choose the client folder",
+  "windows": ["*"],
+  "permissions": ["core:default", "core:event:default", "dialog:allow-open"]
+}

@@ -1,4 +1,4 @@
-# OpenThorPatcher with OdinGuard
+# OpenThor Patcher with OdinGuard
 
 OdinGuard is optional. With it, the patcher helps keep honest players from being flagged during a patch rollout.
 

@@ -1,0 +1,188 @@
+//! OpenThor Patch Maker backend: Tauri commands over otp-core. The GUI does nothing `otp` (the CLI) cannot do.
+
+use std::path::{Path, PathBuf};
+
+use otp_core::apply::GrfKey;
+use otp_core::patchlist::PatchList;
+use otp_core::project::{scan_client, Project, ScanItem, Suggest};
+use otp_core::publish::{publish, site_files, PublishReport, SiteFile};
+use serde::Serialize;
+use tauri::Emitter;
+
+type Res<T> = Result<T, String>;
+
+fn err<E: std::fmt::Display>(e: E) -> String {
+    e.to_string()
+}
+
+#[tauri::command]
+fn app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+fn scan(dir: String) -> Res<Vec<ScanItem>> {
+    scan_client(Path::new(&dir)).map_err(err)
+}
+
+#[tauri::command]
+fn load_project(path: String) -> Res<Project> {
+    Project::load(Path::new(&path)).map_err(err)
+}
+
+#[tauri::command]
+fn save_project(path: String, project: Project) -> Res<()> {
+    project.save(Path::new(&path)).map_err(err)
+}
+
+/// A new project from a master client: big GRFs become Thor targets, small files are synced whole.
+#[tauri::command]
+fn new_project(path: String, server: String, client: String, site: String) -> Res<Project> {
+    if Path::new(&path).exists() {
+        return Err(format!("{path} exists"));
+    }
+    let mut p = Project::new(&server, PathBuf::from(&client), PathBuf::from(&site));
+    for i in scan_client(Path::new(&client)).map_err(err)? {
+        match i.suggest {
+            Suggest::Thor => p.thor.push(i.path),
+            Suggest::Sync => p.sync.push(i.path),
+            Suggest::Ignore => {}
+        }
+    }
+    p.save(Path::new(&path)).map_err(err)?;
+    Ok(p)
+}
+
+#[derive(Serialize)]
+struct Keys {
+    seed_path: String,
+    pub_hex: String,
+}
+
+/// Creates the key pair in `dir` (never overwrites). Returns the paths and the public key as hex.
+#[tauri::command]
+fn make_keys(dir: String) -> Res<Keys> {
+    let d = Path::new(&dir);
+    let seed = d.join("signing.seed");
+    if !seed.exists() {
+        otp_core::sign::keygen(d).map_err(err)?;
+    }
+    let pub_hex = std::fs::read_to_string(d.join("patcher.pub")).map_err(err)?.trim().to_string();
+    Ok(Keys { seed_path: seed.display().to_string(), pub_hex })
+}
+
+#[tauri::command]
+fn read_pub(dir: String) -> Res<String> {
+    Ok(std::fs::read_to_string(Path::new(&dir).join("patcher.pub")).map_err(err)?.trim().to_string())
+}
+
+async fn run_publish(app: tauri::AppHandle, project: Project, grf_password: Option<String>, dry: bool) -> Res<PublishReport> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let key = GrfKey::from_password(grf_password.as_deref()).map_err(err)?.0;
+        publish(&project, key, dry, &mut |line| {
+            let _ = app.emit("log", line);
+        })
+        .map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+#[tauri::command]
+async fn plan(app: tauri::AppHandle, project: Project, grf_password: Option<String>) -> Res<PublishReport> {
+    run_publish(app, project, grf_password, true).await
+}
+
+#[tauri::command]
+async fn publish_site(app: tauri::AppHandle, project: Project, grf_password: Option<String>) -> Res<PublishReport> {
+    run_publish(app, project, grf_password, false).await
+}
+
+#[tauri::command]
+fn files_to_upload(project: Project) -> Vec<SiteFile> {
+    site_files(&project)
+}
+
+#[derive(Serialize)]
+struct SiteStatus {
+    published: bool,
+    server: String,
+    updated: String,
+    patches: usize,
+    files: usize,
+    targets: usize,
+    signed: bool,
+}
+
+#[tauri::command]
+fn site_status(project: Project) -> SiteStatus {
+    let list = std::fs::read(project.site.join("patchlist.json")).ok().and_then(|b| PatchList::parse(&b).ok());
+    match list {
+        Some(l) => SiteStatus {
+            published: true,
+            server: l.server,
+            updated: l.updated,
+            patches: l.patches.len(),
+            files: l.files.len(),
+            targets: l.targets.len(),
+            signed: project.site.join("patchlist.json.sig").is_file(),
+        },
+        None => SiteStatus { published: false, server: String::new(), updated: String::new(), patches: 0, files: 0, targets: 0, signed: false },
+    }
+}
+
+/// The `patcher.json` a player's OpenThor Patcher needs next to its executable.
+#[tauri::command]
+fn patcher_config(project: Project, pub_hex: String, list_url: Option<String>) -> Res<String> {
+    let base = project.base_urls.first().cloned().unwrap_or_default();
+    let mut v = serde_json::json!({
+        "name": project.server,
+        "patch_url": base,
+        "pub_key": pub_hex,
+    });
+    if let Some(u) = list_url.filter(|u| !u.is_empty()) {
+        v["list_url"] = serde_json::Value::String(u);
+    }
+    serde_json::to_string_pretty(&v).map_err(err)
+}
+
+#[tauri::command]
+fn write_text(path: String, text: String) -> Res<()> {
+    std::fs::write(&path, text).map_err(err)
+}
+
+#[tauri::command]
+fn reveal(path: String) -> Res<()> {
+    let p = Path::new(&path);
+    let dir = if p.is_dir() { p } else { p.parent().unwrap_or(p) };
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(target_os = "windows")]
+    let cmd = "explorer";
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let cmd = "xdg-open";
+    std::process::Command::new(cmd).arg(dir).spawn().map(|_| ()).map_err(err)
+}
+
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            app_version,
+            scan,
+            load_project,
+            save_project,
+            new_project,
+            make_keys,
+            read_pub,
+            plan,
+            publish_site,
+            files_to_upload,
+            site_status,
+            patcher_config,
+            write_text,
+            reveal,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running OpenThor Patch Maker");
+}

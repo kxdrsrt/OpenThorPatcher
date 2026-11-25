@@ -30,7 +30,18 @@ pub fn sign(seed_file: &Path, data: &[u8]) -> Result<String> {
 }
 
 pub fn verify(pub_file: &Path, data: &[u8], sig_hex: &str) -> Result<()> {
-    let key = VerifyingKey::from_bytes(&read_hex32(pub_file)?).map_err(|_| msg("public key invalid"))?;
+    verify_key(&read_hex32(pub_file)?, data, sig_hex)
+}
+
+/// Like [`verify`] with the public key as hex text (what a patcher ships in its config).
+pub fn verify_hex(pub_hex: &str, data: &[u8], sig_hex: &str) -> Result<()> {
+    let v = hex::decode(pub_hex.trim()).map_err(|_| msg("public key is not hex"))?;
+    let k: [u8; 32] = v.try_into().map_err(|_| msg("public key needs 32 bytes"))?;
+    verify_key(&k, data, sig_hex)
+}
+
+fn verify_key(bytes: &[u8; 32], data: &[u8], sig_hex: &str) -> Result<()> {
+    let key = VerifyingKey::from_bytes(bytes).map_err(|_| msg("public key invalid"))?;
     let raw = hex::decode(sig_hex.trim()).map_err(|_| msg("signature is not hex"))?;
     let sig = Signature::from_slice(&raw).map_err(|_| msg("signature has the wrong length"))?;
     key.verify(data, &sig).map_err(|_| msg("the patch list signature is INVALID (wrong server or tampered list)"))
