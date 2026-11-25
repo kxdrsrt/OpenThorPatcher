@@ -1,16 +1,16 @@
 # OpenThor Patcher
 
 <p align="center">
-  <img src="docs/images/icon.png" width="128" alt="OpenThor Patcher app icon">
-</p>
-
-<p align="center">
   <img src="docs/images/logo.png" width="420" alt="OpenThor Patcher">
 </p>
 
 > _A free, fast and stable patcher for Ragnarok Online clients: the open successor of Thor Patcher and NeonCube._
 
 **Windows · macOS** (CLI and core also Linux) · **Rust + Tauri 2** · **MIT or Apache-2.0** · **v0.1.0 (pre-release)**
+
+<p align="center">
+  <img src="docs/images/icon.png" width="128" alt="OpenThor Patcher app icon">
+</p>
 
 <p align="center">
   <a href="https://github.com/kxdrsrt/OpenThorPatcher/releases"><img src="https://img.shields.io/github/v/release/kxdrsrt/OpenThorPatcher?include_prereleases&style=flat-square&color=2563eb" alt="Latest release"></a>
