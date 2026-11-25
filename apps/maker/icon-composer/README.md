@@ -7,8 +7,9 @@ Rounded corners, shadows and highlights must not be baked in.
 | File | Role |
 | --- | --- |
 | `1-background.png` | Opaque full-bleed layer: navy gradient with the gold rune ring |
-| `2-hammer.png` | Foreground layer, the hammer on a transparent background |
-| `3-badge.png` | Gold plus badge (Maker only) |
+| `2-lightning.png` | Foreground layer 1, ice-blue lightning around the ring (transparent inside the ring) |
+| `3-hammer.png` | Foreground layer 2, the hammer on a transparent background |
+| `4-badge.png` | Gold plus badge (Maker only) |
 | `preview-unmasked.png` | Flattened preview of the stack |
 
 ## Build the real `.icon`
