@@ -7,7 +7,7 @@ Rounded corners, shadows and highlights must not be baked in.
 | File | Role |
 | --- | --- |
 | `1-background.png` | Opaque full-bleed layer: navy gradient with the gold rune ring |
-| `2-lightning.png` | Foreground layer 1, anime-style lightning bolts in a ring behind the gold ring (transparent inside it) |
+| `2-lightning.png` | Foreground layer 1, anime-style lightning ring running along the outside of the gold ring (transparent elsewhere) |
 | `3-hammer.png` | Foreground layer 2, the hammer on a transparent background |
 | `preview-unmasked.png` | Flattened preview of the stack |
 
