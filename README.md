@@ -1,8 +1,28 @@
 # OpenThor Patcher
 
+<p align="center">
+  <img src="docs/images/logo.png" width="420" alt="OpenThor Patcher">
+</p>
+
 > _A free, fast and stable patcher for Ragnarok Online clients: the open successor of Thor Patcher and NeonCube._
 
-MIT or Apache-2.0. Status: **working core, CLI, MCP server and both apps**; see [docs/ROADMAP.md](docs/ROADMAP.md).
+**Windows · macOS** (CLI and core also Linux) · **Rust + Tauri 2** · **MIT or Apache-2.0** · **v0.1.0 (pre-release)**
+
+<p align="center">
+  <a href="https://github.com/kxdrsrt/OpenThorPatcher/releases"><img src="https://img.shields.io/github/v/release/kxdrsrt/OpenThorPatcher?include_prereleases&style=flat-square&color=2563eb" alt="Latest release"></a>
+  <a href="https://github.com/kxdrsrt/OpenThorPatcher/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/kxdrsrt/OpenThorPatcher/ci.yml?style=flat-square&label=CI" alt="CI"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20%7C%20Apache--2.0-blue?style=flat-square" alt="License"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sponsors/kxdrsrt"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ff69b4?style=flat-square&logo=github" alt="GitHub Sponsors"></a>
+  <a href="https://ko-fi.com/kadirsert"><img src="https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?style=flat-square&logo=ko-fi" alt="Ko-fi"></a>
+  <a href="https://opencollective.com/kxdrsrt"><img src="https://img.shields.io/badge/Donate-Open%20Collective-7FADF2?style=flat-square&logo=opencollective" alt="Open Collective"></a>
+  <a href="https://www.patreon.com/cw/kxdrsrt"><img src="https://img.shields.io/badge/Support-Patreon-FF424D?style=flat-square&logo=patreon" alt="Patreon"></a>
+  <a href="https://liberapay.com/kxdrsrt/"><img src="https://img.shields.io/badge/Donate-Liberapay-F6C915?style=flat-square&logo=liberapay&logoColor=black" alt="Liberapay"></a>
+</p>
+
+Status: **working core, CLI, MCP server and both apps**; see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Three programs and one library:
 
@@ -98,3 +118,19 @@ Players get `patcher.json` next to the patcher (the Patch Maker writes it):
 
 No anti-cheat of its own ([OdinGuard](https://github.com/kxdrsrt/OdinGuard) does that), no account system, no
 payments. Windows 7 is not supported (the window uses WebView2); the CLI and the core have no such limit.
+
+## Support the project
+
+OpenThor Patcher is free and stays free. If it saves you time, you can support its development:
+
+<p align="center">
+  <a href="https://github.com/sponsors/kxdrsrt"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ff69b4?style=flat-square&logo=github" alt="GitHub Sponsors"></a>
+  <a href="https://ko-fi.com/kadirsert"><img src="https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?style=flat-square&logo=ko-fi" alt="Ko-fi"></a>
+  <a href="https://opencollective.com/kxdrsrt"><img src="https://img.shields.io/badge/Donate-Open%20Collective-7FADF2?style=flat-square&logo=opencollective" alt="Open Collective"></a>
+  <a href="https://www.patreon.com/cw/kxdrsrt"><img src="https://img.shields.io/badge/Support-Patreon-FF424D?style=flat-square&logo=patreon" alt="Patreon"></a>
+  <a href="https://liberapay.com/kxdrsrt/"><img src="https://img.shields.io/badge/Donate-Liberapay-F6C915?style=flat-square&logo=liberapay&logoColor=black" alt="Liberapay"></a>
+</p>
+
+## License
+
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
