@@ -59,6 +59,10 @@ swapped in; the old file is **replaced completely**, a `.bak` only stays with `-
 - **Optional packs** (for example OdinGuard's competitive pack) with a per-player switch that survives patching.
 - **Scriptable and AI-ready:** CLI with `--json`, and the `otp-mcp` MCP server (10 tools: create the project, preview, publish, write news, set servers and links) so an assistant can run your patch site; see [docs/MCP.md](docs/MCP.md).
 
+## Download
+
+Pre-built programs for Windows x64 and macOS (Apple silicon) are on the [Releases](https://github.com/kxdrsrt/OpenThorPatcher/releases) page (built by GitHub Actions from a version tag). They are **pre-releases**: the Windows `.exe` files are not code-signed (SmartScreen warns), and the apps have not yet been tried on real player machines. See [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## Quick start (operator)
 
 ```sh

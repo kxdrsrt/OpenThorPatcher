@@ -1,0 +1,83 @@
+name: Release
+
+# Push a tag like v0.1.0 (or v0.2.0-rc.1): builds Windows x64 and macOS (Apple silicon) and creates a GitHub release.
+# A tag with a hyphen (v0.1.0-rc.1) or a major version of 0 is marked "pre-release".
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            ext: .exe
+          - os: macos-latest
+            name: macos-arm64
+            ext: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --locked -p otp-cli -p otp-mcp -p openthor-patcher -p openthor-maker
+      - name: Package
+        shell: bash
+        run: |
+          set -eu
+          V="${GITHUB_REF_NAME:-dev}"
+          D="openthor-patcher-$V-${{ matrix.name }}"
+          mkdir "$D"
+          for b in otp otp-mcp openthor-patcher openthor-maker; do
+            cp "target/release/$b${{ matrix.ext }}" "$D/"
+          done
+          cp README.md LICENSE-MIT LICENSE-APACHE "$D/"
+          if [ "${{ matrix.name }}" = windows-x64 ]; then
+            7z a "$D.zip" "$D" >/dev/null
+          else
+            zip -qr "$D.zip" "$D"
+          fi
+          shasum -a 256 "$D.zip" > "$D.zip.sha256" 2>/dev/null || sha256sum "$D.zip" > "$D.zip.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            openthor-patcher-*.zip
+            openthor-patcher-*.zip.sha256
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          TAG="$GITHUB_REF_NAME"
+          PRE=""
+          case "$TAG" in v0.*|*-*) PRE="--prerelease" ;; esac
+          cat > notes.md <<'EOF'
+          Each zip holds `otp` (CLI), `otp-mcp` (MCP server), `openthor-patcher` (player window) and `openthor-maker` (Patch Maker).
+
+          **Pre-release.** Core, CLI and MCP server are covered by tests. The two apps have been run in a Windows 11 VM only and not yet on real player machines.
+          The Windows programs are **not code-signed**: SmartScreen shows "unknown publisher" (More info, Run anyway). Windows 10/11 with WebView2 is required.
+          The macOS programs are not notarized (right-click, Open).
+
+          Verify downloads with the `.sha256` files. See the [README](https://github.com/${{ github.repository }}#readme) and `docs/DEPLOY.md`.
+          EOF
+          gh release create "$TAG" $PRE --repo "$GITHUB_REPOSITORY" --title "OpenThor Patcher $TAG" --notes-file notes.md dist/*
