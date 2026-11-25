@@ -6,10 +6,9 @@ Rounded corners, shadows and highlights must not be baked in.
 
 | File | Role |
 | --- | --- |
-| `1-background.png` | Opaque full-bleed gradient (set it as the background fill in Icon Composer) |
-| `2-bolt.png` | Foreground layer 1, flat lightning shape (give it some translucency) |
-| `3-hammer.png` | Foreground layer 2, the hammer, clean edges, transparent background |
-| `4-badge.png` | Maker only, the gold plus badge |
+| `1-background.png` | Opaque full-bleed layer: navy gradient with the gold rune ring |
+| `2-hammer.png` | Foreground layer, the hammer on a transparent background |
+| `3-badge.png` | Gold plus badge (Maker only) |
 | `preview-unmasked.png` | Flattened preview of the stack |
 
 ## Build the real `.icon`
