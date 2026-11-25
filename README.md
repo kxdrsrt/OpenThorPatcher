@@ -1,6 +1,10 @@
 # OpenThor Patcher
 
 <p align="center">
+  <img src="docs/images/icon.png" width="128" alt="OpenThor Patcher app icon">
+</p>
+
+<p align="center">
   <img src="docs/images/logo.png" width="420" alt="OpenThor Patcher">
 </p>
 
