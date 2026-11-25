@@ -24,33 +24,29 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "updated": "2026-11-25T03:00:00Z",
   "allow_patching": true,
   "message": "",
-  "base_url": ["https://patch.example.com/files/", "https://mirror.example.net/files/"],
-  "patches": [
-    {
-      "id": 1,
-      "file": "0001-data.thor",
-      "kind": "thor",
-      "size": 1234567,
-      "sha256": "…",
-      "target": "data.grf"
-    },
-    { "id": 2, "file": "0002-odin.thor", "kind": "thor", "size": 3057437, "sha256": "…", "target": "odin.grf" }
+  "base_url": ["https://patch.example.com/", "https://mirror.example.net/patch/"],
+  "files": [
+    { "path": "odin.grf", "size": 3057437, "sha256": "…", "url": "files/odin.grf" },
+    { "path": "odinguard.dll", "size": 123456, "sha256": "…", "url": "files/odinguard.dll" }
   ],
-  "client": {
-    "exe": "alpha.exe", "args": "-1sak1",
-    "files": [{ "path": "odinguard.dll", "url": "client/odinguard.dll", "sha256": "…" }]
+  "targets": {
+    "data.grf": { "baseline_sha256": "…", "full": { "path": "data.grf", "size": 0, "sha256": "…", "url": "files/data.grf" }, "full_id": 7 }
   },
-  "data_ini": {
-    "order": ["odin.grf", "@pack:competitive", "cdata.grf", "core.grf", "cpal.grf", "data.grf"],
-    "packs": [
-      { "id": "competitive", "file": "odin-dark.grf", "title": "Competitive visuals", "default": true, "locked_by_server": false }
-    ]
-  },
-  "odinguard": { "manifest": "odinguard/manifest.json" }
+  "patches": [
+    { "id": 1, "target": "data.grf", "file": "patches/0001-data.thor", "size": 1234567, "sha256": "…" }
+  ]
 }
 ```
 
-* `target` is the GRF the Thor patch is merged into (a patch's own target field is only a default).
+*Implemented (schema 1).* `files` are kept equal to the master by hash (small GRFs, dll, exe). `targets` are big GRFs
+patched entry by entry: `baseline_sha256` is the version patch 0 starts from (what a fresh client package contains),
+`full` is an optional whole copy for repair and `full_id` the patch id it corresponds to. `patches` are applied in id
+order; ids are assigned by `otp publish`, nobody names or numbers them. A relative `url` is appended to the first
+mirror in `base_url` that has the file.
+
+Planned for later milestones (not in schema 1 yet): `client` (exe + args), `data_ini` (order, optional packs such as
+the competitive pack with a per-player switch) and `odinguard` (manifest hook).
+
 * The file is signed with Ed25519 (`patchlist.json.sig`); the public key ships with the patcher. An unsigned or
   wrongly signed list is refused unless the operator switched signatures off in `config.toml` (development only).
 * `plist.txt` (Thor Patcher: `id name.thor`, `//` comments) is still read when there is no `patchlist.json`; hashes
