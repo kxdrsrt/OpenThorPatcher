@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use otp_core::launch;
-use otp_core::patchlist::{ChangeEntry, ClientCfg, NewsItem, PatchList};
+use otp_core::patchlist::{ChangeEntry, ClientCfg, LinkItem, NewsItem, PatchList};
 use otp_core::sync::{self, Config, Event, Summary};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
@@ -38,6 +38,9 @@ struct Cfg {
     game_args: Option<String>,
     #[serde(default)]
     setup_exe: Option<String>,
+    /// For classic servers without a patch list.
+    #[serde(default)]
+    website: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default)]
@@ -165,6 +168,8 @@ struct Checked {
     can_setup: bool,
     news: Vec<NewsItem>,
     changelog: Vec<ChangeEntry>,
+    website: String,
+    links: Vec<LinkItem>,
     summary: Summary,
 }
 
@@ -201,6 +206,8 @@ async fn check(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
             packs,
             can_play: !game.exe.is_empty(),
             can_setup: !game.setup_exe.is_empty(),
+            website: l.as_ref().map(|l| l.website.clone()).filter(|w| !w.is_empty()).or_else(|| cfg.website.clone()).unwrap_or_default(),
+            links: l.as_ref().map(|l| l.links.clone()).unwrap_or_default(),
             news: l.as_ref().map(|l| l.news.clone()).unwrap_or_default(),
             changelog: l.as_ref().map(|l| l.changelog.clone()).unwrap_or_default(),
             summary,
@@ -295,6 +302,25 @@ fn setup(app: tauri::AppHandle, st: State<'_, Arc<App>>) -> Res<()> {
     launch::start(&client_dir(&app), &g.setup_exe, "").map_err(err)
 }
 
+/// Opens a web link in the player's browser. Only http(s); no shell is involved, so the link cannot run anything.
+#[tauri::command]
+fn open_url(url: String) -> Res<()> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) || url.chars().any(|c| c.is_control() || c == ' ') || url.len() > 2000 {
+        return Err("only http(s) links can be opened".into());
+    }
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("rundll32");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    };
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let mut cmd = std::process::Command::new("xdg-open");
+    cmd.arg(&url).spawn().map(|_| ()).map_err(err)
+}
+
 #[derive(Deserialize, Default)]
 struct ThemeJson {
     #[serde(default)]
@@ -385,7 +411,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
-        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme])
+        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url])
         .run(tauri::generate_context!())
         .expect("error while running OpenThor Patcher");
 }

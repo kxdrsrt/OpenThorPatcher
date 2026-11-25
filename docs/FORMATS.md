@@ -36,6 +36,8 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "patches": [
     { "id": 1, "target": "data.grf", "file": "patches/0001-data.thor", "size": 1234567, "sha256": "…" }
   ],
+  "website": "https://burning.example",
+  "links": [{ "title": "Discord", "url": "https://discord.gg/x" }],
   "remove": ["old.dll", "oldfolder/*"],
   "news": [{ "date": "2026-11-25", "title": "Welcome", "body": "The **test server** is open.\n\n- 75x base" }],
   "changelog": [{ "date": "2026-11-25", "version": "Patch 12", "title": "LGP colours", "items": ["Magnus tiles are red"] }],

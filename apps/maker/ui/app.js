@@ -187,6 +187,17 @@ function today() { return new Date().toISOString().slice(0, 10); }
 
 function renderNewsPage() {
   bind("#n-url2", () => project.news_url, (v) => (project.news_url = v));
+  bind("#w-url", () => project.website, (v) => (project.website = v));
+  const ll = $("#links-list");
+  ll.innerHTML = "";
+  project.links.forEach((l, i) => {
+    const row = el("div", "item", `<input value="${esc(l.title)}" placeholder="Discord" size="14" aria-label="Link title"><input value="${esc(l.url)}" placeholder="https://…" aria-label="Link address" style="flex:1">`);
+    const [t, u] = row.querySelectorAll("input");
+    t.oninput = () => { l.title = t.value; touch(); }; u.oninput = () => { l.url = u.value; touch(); };
+    const b = el("button", "btn icon small danger", icon("trash")); b.title = "Remove"; b.setAttribute("aria-label", "Remove link");
+    b.onclick = () => { project.links.splice(i, 1); touch(); renderNewsPage(); };
+    row.appendChild(b); ll.appendChild(row);
+  });
   const nl = $("#news-list");
   nl.innerHTML = "";
   if (!project.news.length) nl.appendChild(el("div", "note", "No news yet."));
@@ -278,6 +289,7 @@ async function openProject(p) {
   project = await invoke("load_project", { path: p });
   project.url_map = project.url_map || {};
   project.news = project.news || [];
+  project.links = project.links || [];
   project.changelog = project.changelog || [];
   path = p;
   render();
@@ -307,6 +319,7 @@ async function newProject() {
     project = await invoke("new_project", { path: file, server, client, site });
     project.url_map = project.url_map || {};
     project.news = project.news || [];
+  project.links = project.links || [];
     project.changelog = project.changelog || [];
     path = file;
     tab = "project";
@@ -361,6 +374,7 @@ $("#remove-new").onkeydown = (e) => e.key === "Enter" && $("#btn-remove-add").cl
 $("#btn-order-add").onclick = () => { const v = $("#order-new").value.trim(); if (v) { ensureIni().order.push(v); $("#order-new").value = ""; touch(); renderOrder(); } };
 $("#order-new").onkeydown = (e) => e.key === "Enter" && $("#btn-order-add").click();
 $("#btn-pack-add").onclick = () => { ensureIni().packs.push({ id: "pack" + (project.data_ini.packs.length + 1), file: "", title: "", default: true, locked: false }); touch(); renderPacks(); };
+$("#btn-link-add").onclick = () => { project.links.push({ title: "", url: "" }); touch(); renderNewsPage(); };
 $("#btn-news-add").onclick = () => { project.news.unshift({ date: today(), title: "", body: "" }); touch(); renderNewsPage(); };
 $("#btn-change-add").onclick = () => { project.changelog.unshift({ date: today(), version: "", title: "", items: [] }); touch(); renderNewsPage(); };
 $("#btn-theme").onclick = async () => {

@@ -11,12 +11,13 @@
     "windows": [
       {
         "title": "OpenThor Patcher",
-        "width": 960,
-        "height": 640,
+        "width": 988,
+        "height": 672,
         "resizable": false,
         "decorations": false,
         "transparent": true,
-        "center": true
+        "center": true,
+        "shadow": false
       }
     ],
     "security": {

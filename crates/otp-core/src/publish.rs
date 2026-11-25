@@ -144,6 +144,8 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     list.remove = p.remove.iter().map(|r| norm(r)).collect();
     list.client = p.game.clone();
     list.data_ini = p.data_ini.clone();
+    list.website = p.website.clone();
+    list.links = p.links.clone();
     list.news = p.news.clone();
     list.changelog = p.changelog.clone();
     let mut rep = PublishReport { dry_run, ..Default::default() };

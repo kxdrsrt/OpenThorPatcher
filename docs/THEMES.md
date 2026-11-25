@@ -11,7 +11,7 @@ publish. **Patch Maker → News & changelog** edits them; in `otp-project.json`:
 ```
 
 News text: blank line = paragraph, `- ` = list item, `**bold**`, `[text](https://…)`. Everything else is escaped. A
-`news_url` (https) adds a third tab that shows a website inside the patcher; without written news the website opens first.
+`website` (https) adds a **Website** button that opens the server's site in the player's browser, `links` ([{title,url}]: Discord, forum, vote …) appear at the bottom of the window, and links inside news text open in the browser too (only http/https, never inside the patcher). A `news_url` (https) adds a third tab that shows a website inside the patcher; without written news the website opens first.
 Newest first.
 
 ## Themes
@@ -46,7 +46,7 @@ transparent there). The layout itself (`patcher.css`) only places things.
 * Fonts and images must be files in the theme folder (the window does not load anything from the internet except the
   optional news website).
 * A theme is CSS, not code: nothing in a theme can run scripts.
-* The window size is fixed (960×640) and the corners outside the frame are transparent; a theme that wants a different
-  window shape has to keep the transparent margin at the top for the logo overhang.
+* The window is fixed (988×672), frameless and transparent around the frame (no native border or shadow). Every shadow of
+  the frame has to fit into the transparent margin (`--margin`, 30 px), otherwise the window rectangle becomes visible.
 * The logo shipped with the program was drawn with an image generator in the style of the Ragnarok logo; replace it freely.
   The Cinzel font is under the SIL Open Font License (`fonts/OFL.txt`).

@@ -147,8 +147,13 @@
         <h3>Changelog</h3>
         <div id="change-list" class="list"></div>
         <div class="inline-add"><button id="btn-change-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add changelog entry</button></div>
-        <h3>Website</h3>
-        <div class="card form"><label class="fld wide"><span>News website (https, shown in a third tab)</span><input id="n-url2" placeholder="https://example.com/news"></label></div>
+        <h3>Website and links</h3>
+        <div class="card form">
+          <label class="fld wide"><span>Server website (the patcher's Website button opens it in the player's browser)</span><input id="w-url" placeholder="https://example.com"></label>
+          <label class="fld wide"><span>News page (https, shown inside the patcher as a third tab)</span><input id="n-url2" placeholder="https://example.com/news"></label>
+        </div>
+        <div id="links-list" class="list" style="margin-top:10px"></div>
+        <div class="inline-add"><button id="btn-link-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add link</button><span class="note" style="align-self:center">Discord, forum, vote … shown at the bottom of the patcher</span></div>
         <h3>Theme</h3>
         <p class="note" style="margin:0 0 10px">The patcher's look is a folder <code>patcher-theme/</code> in the client: <code>theme.json</code>, <code>theme.css</code>, a logo and fonts. Export the built-in "Midgard Night" theme, change it, and put the folder into the master client; the Files page then syncs it to players like any other file.</p>
         <div class="row"><button id="btn-theme" class="btn"><svg class="ic"><use href="#i-save"/></svg>Export the default theme…</button></div>

@@ -45,12 +45,24 @@ pub struct PatchList {
     pub client: Option<ClientCfg>,
     #[serde(default)]
     pub data_ini: Option<DataIniCfg>,
+    /// The server's website: the patcher's *Website* button opens it in the player's browser.
+    #[serde(default)]
+    pub website: String,
+    /// More links (Discord, forum, vote ...), shown at the bottom of the patcher window.
+    #[serde(default)]
+    pub links: Vec<LinkItem>,
     /// News shown in the patcher's News tab (newest first, written by the operator).
     #[serde(default)]
     pub news: Vec<NewsItem>,
     /// Changelog shown in the patcher's Changelog tab (newest first).
     #[serde(default)]
     pub changelog: Vec<ChangeEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LinkItem {
+    pub title: String,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

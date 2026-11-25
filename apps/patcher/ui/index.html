@@ -24,6 +24,7 @@
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.5 3 8 7.5 9.5 4.5-1.5 7.5-5 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.4 4 5.6 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.6-4-9s1.4-6.6 4-9z"/></symbol>
     <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 17h12"/></symbol>
   </defs>
 </svg>
@@ -60,15 +61,21 @@
         <div class="pline"><span id="p-name" class="mono"></span><span id="p-size" class="mono"></span></div>
         <pre id="log" class="out" aria-live="polite"></pre>
         <div class="buttons">
+        <div class="row-main">
           <button id="btn-play" class="btn primary big" disabled><svg class="ic"><use href="#i-play"/></svg>Play</button>
           <button id="btn-update" class="btn big" hidden><svg class="ic"><use href="#i-update"/></svg>Update</button>
           <button id="btn-cancel" class="btn big" hidden><svg class="ic"><use href="#i-stop"/></svg>Cancel</button>
+        </div>
+        <div class="row-sec">
           <button id="btn-check" class="btn" title="Re-check every file against the server"><svg class="ic"><use href="#i-shield"/></svg>Check files</button>
           <button id="btn-setup" class="btn" hidden><svg class="ic"><use href="#i-sliders"/></svg>Setup</button>
+          <button id="btn-web" class="btn" hidden title="Open the server's website"><svg class="ic"><use href="#i-globe"/></svg>Website</button>
         </div>
+      </div>
       </aside>
     </main>
-    <footer class="foot"><span id="foot-ver">OpenThor Patcher</span><span id="foot-theme"></span></footer>
+    <div id="scrim" class="scrim" hidden></div>
+    <footer class="foot"><span id="foot-ver">OpenThor Patcher</span><span id="foot-links" class="links"></span><span id="foot-theme"></span></footer>
   </div>
 
   <dialog id="dlg" aria-labelledby="dlg-title">

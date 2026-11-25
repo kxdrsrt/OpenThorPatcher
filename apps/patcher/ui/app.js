@@ -49,8 +49,26 @@ function setTab(name) {
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.id === "p-" + name));
 }
 
+const openUrl = (u) => invoke("open_url", { url: u }).catch((e) => toast(String(e), "bad"));
+
+function renderLinks(c) {
+  const root = $("#foot-links");
+  root.innerHTML = "";
+  for (const l of (c?.links || [])) {
+    if (!/^https?:\/\//.test(l.url)) continue;
+    const a = document.createElement("a");
+    a.textContent = l.title || l.url;
+    a.title = l.url;
+    a.tabIndex = 0;
+    a.onclick = () => openUrl(l.url);
+    a.onkeydown = (e) => { if (e.key === "Enter") openUrl(l.url); };
+    root.appendChild(a);
+  }
+}
+
 function news() {
   const c = checked;
+  renderLinks(c);
   renderNews(c);
   renderChangelog(c);
   const url = c?.news_url;
@@ -126,6 +144,7 @@ function buttons() {
   $("#btn-check").disabled = patching;
   $("#btn-setup").hidden = !(checked && checked.can_setup);
   $("#btn-setup").disabled = patching;
+  $("#btn-web").hidden = !(checked && checked.website);
   $("#btn-update").classList.toggle("primary", !!has);
   $("#btn-play").classList.toggle("primary", !has);
 }
@@ -191,6 +210,7 @@ async function openSettings() {
   $("#s-dir").value = info.client_dir;
   $("#s-auto").checked = info.auto_update;
   $("#s-bak").checked = info.keep_backup;
+  $("#scrim").hidden = false;
   $("#dlg").showModal();
 }
 
@@ -224,10 +244,16 @@ $("#btn-settings").onclick = openSettings;
 $("#btn-min").onclick = () => winCall("minimize");
 $("#btn-close").onclick = () => winCall("close");
 $("#s-pick").onclick = async () => { const d = await T.dialog.open({ directory: true, title: "Client folder" }); if (d) $("#s-dir").value = d; };
-$("#dlg").addEventListener("close", saveSettings);
+$("#dlg").addEventListener("close", () => { $("#scrim").hidden = true; saveSettings(); });
 $("#btn-update").onclick = () => patch(false);
 $("#btn-check").onclick = async () => { const c = await check(true); if (c && !upToDate(c.summary)) patch(true); else if (c) toast("All files match the server."); };
 $("#btn-cancel").onclick = () => { invoke("cancel"); $("#btn-cancel").disabled = true; };
+$("#btn-web").onclick = () => checked?.website && openUrl(checked.website);
+// links inside news text open in the player's browser, never inside the patcher window
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest("a[href]");
+  if (a && /^https?:\/\//.test(a.getAttribute("href"))) { e.preventDefault(); openUrl(a.getAttribute("href")); }
+});
 $("#btn-play").onclick = () => invoke("play").then(() => toast("Starting the game…")).catch((e) => toast(String(e), "bad"));
 $("#btn-setup").onclick = () => invoke("setup").catch((e) => toast(String(e), "bad"));
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));

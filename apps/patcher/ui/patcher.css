@@ -9,11 +9,12 @@
   --logo-w: 400px;
   --logo-h: 257px;
   --overhang: 84px;
+  --margin: 30px; /* transparent margin: every shadow of the frame must fit into it, or the window rectangle shows */
 }
 html, body { background: transparent !important; }
 [hidden] { display: none !important; }
 body { overflow: hidden; user-select: none; }
-.stage-wrap { position: relative; height: 100%; display: flex; flex-direction: column; padding: var(--overhang) 22px 22px; }
+.stage-wrap { position: relative; height: 100%; display: flex; flex-direction: column; padding: var(--overhang) var(--margin) var(--margin); }
 .logo { position: absolute; top: 0; left: 50%; width: var(--logo-w); height: auto; transform: translateX(-50%); z-index: 6; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .55)); -webkit-user-drag: none; }
 .frame { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 6px 14px; }
@@ -56,9 +57,17 @@ body { overflow: hidden; user-select: none; }
 .pline { display: flex; justify-content: space-between; gap: 10px; min-height: 16px; font-size: 11px; opacity: .8; }
 .pline span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #log { flex: 1; min-height: 40px; font-size: 11px; padding: 6px 8px; margin: 0; overflow: auto; white-space: pre-wrap; user-select: text; }
-.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.buttons { display: flex; flex-direction: column; gap: 8px; }
+.row-main, .row-sec { display: flex; gap: 8px; }
 .btn.big { flex: 1; min-height: 40px; }
-.foot { display: flex; justify-content: space-between; padding: 6px 16px 8px; font-size: 11px; opacity: .7; }
+.row-sec .btn { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+.row-sec .btn[hidden] { display: none; }
+.scrim { position: absolute; inset: 0; border-radius: 10px; z-index: 5; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 16px 8px; font-size: 11px; }
+.foot > span { opacity: .7; }
+.foot .links { display: flex; gap: 14px; opacity: 1; }
+.foot .links a { cursor: pointer; text-decoration: none; }
+.foot .links a:hover { text-decoration: underline; }
 dialog { padding: 0; width: min(520px, calc(100% - 40px)); }
 dialog form { padding: 16px 18px 18px; }
 dialog header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }

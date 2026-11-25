@@ -55,6 +55,8 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   d.querySelector("nav button[data-tab=players]").click(); await sleep(30);
   ok(d.querySelectorAll("#order-list .item").length === 2 && d.querySelectorAll("#packs tbody tr").length === 1, "maker: DATA.INI order and packs");
   d.querySelector("nav button[data-tab=news]").click(); await sleep(30);
+  d.getElementById("btn-link-add").click();
+  ok(d.querySelectorAll("#links-list .item").length === 1, "maker: link added");
   d.getElementById("btn-news-add").click(); d.getElementById("btn-change-add").click();
   ok(d.querySelectorAll("#news-list .card").length === 1 && d.querySelectorAll("#change-list .card").length === 1, "maker: news and changelog entries added");
   const ta = d.querySelector("#change-list textarea"); ta.value = "a\nb\n"; ta.dispatchEvent(new w.Event("input"));
@@ -72,7 +74,8 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
     core: { invoke: async (c, a) => { switch (c) {
       case "init": return { name: "TestRO", client_dir: "/c", auto_update: false, keep_backup: true, error: null, version: "0.1.0" };
       case "get_theme": return null;
-      case "check": return Object.assign({ server: "TestRO", notice: "Welcome!", news: [{ date: "2026-11-25", title: "Hello <b>", body: "Para one\n\n- item **bold**\n- [link](https://x.y/z)" }], changelog: [{ date: "2026-11-25", version: "Patch 3", title: "T", items: ["one", "two"] }], news_url: "", open: true, message: "", packs: [{ id: "comp", title: "Competitive", on: true, locked: false }], can_play: true, can_setup: true, summary }, extra);
+      case "open_url": w.opened = (w.opened || []).concat(a.url); return null;
+      case "check": return Object.assign({ server: "TestRO", notice: "Welcome!", news: [{ date: "2026-11-25", title: "Hello <b>", body: "Para one\n\n- item **bold**\n- [link](https://x.y/z)" }], changelog: [{ date: "2026-11-25", version: "Patch 3", title: "T", items: ["one", "two"] }], website: "https://burning.example", links: [{ title: "Discord", url: "https://discord.gg/x" }, { title: "bad", url: "javascript:alert(1)" }], news_url: "", open: true, message: "", packs: [{ id: "comp", title: "Competitive", on: true, locked: false }], can_play: true, can_setup: true, summary }, extra);
       case "patch": return summary;
       default: return null; } } },
     dialog: { open: async () => "/c2" }, event: { listen: async () => () => {} },
@@ -84,6 +87,11 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   ok(d.querySelectorAll("#p-news .news-item").length === 1 && d.querySelector("#p-news h4").textContent === "Hello <b>", "patcher: news rendered and escaped");
   ok(d.querySelectorAll("#p-news li").length === 2 && d.querySelector("#p-news strong") && d.querySelector("#p-news a").href.startsWith("https://x.y"), "patcher: news markup");
   ok(d.querySelectorAll("#p-changelog .change-entry li").length === 2, "patcher: changelog");
+  ok(!d.getElementById("btn-web").hidden, "patcher: website button");
+  d.getElementById("btn-web").click(); await sleep(20);
+  ok(d.querySelectorAll("#foot-links a").length === 1, "patcher: footer links (non-http dropped)");
+  d.querySelector("#p-news a").click(); await sleep(20);
+  ok(w.opened && w.opened.includes("https://burning.example") && w.opened.some((u) => u.startsWith("https://x.y")), "patcher: website and news links open in the browser");
   d.querySelector('#tabs button[data-tab=changelog]').click();
   ok(d.getElementById("p-changelog").classList.contains("active") && !d.getElementById("p-news").classList.contains("active"), "patcher: tab switch");
   ok(d.querySelectorAll("#packs label").length === 1, "patcher: pack switch");
