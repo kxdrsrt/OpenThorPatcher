@@ -26,7 +26,23 @@
   <a href="https://liberapay.com/kxdrsrt/"><img src="https://img.shields.io/badge/Donate-Liberapay-F6C915?style=flat-square&logo=liberapay&logoColor=black" alt="Liberapay"></a>
 </p>
 
-Status: **working core, CLI, MCP server and both apps**; see [docs/ROADMAP.md](docs/ROADMAP.md).
+## Status: pre-release, not production-ready yet
+
+**v0.1.0 is a pre-release.** The core, the CLI, the MCP server and both apps work and are tested (unit tests, the
+end-to-end script `tests/e2e.sh` with plain and encrypted GRFs, a tampered patch list, a broken download, file removal and
+the classic `plist.txt` layout, and a run against a real 2.5 GB `data.grf`). It is **not** a stable production version:
+
+* **Nobody has clicked through the two apps yet.** The Patcher ran in a Windows 11 virtual machine (x64 emulation) against a
+  local test server, the user interface logic was tested with a scripted DOM.
+* **Not tested on a real player PC:** slow connections, antivirus scanners and locked files are unknown territory.
+* **The `.exe` files are not code-signed**, so Windows SmartScreen shows "unknown publisher".
+* **No self-update and no installer:** a new version goes into your client package.
+* **Cloud links** (Google Drive, Dropbox, OneDrive) and **private GitHub/GitLab repositories** are only tested with local
+  stand-ins, not against the real services.
+* Planned, not there yet: the OdinGuard hook (M6), installers and self-update (M7), parallel downloads (M8).
+
+A stable **v1.0** needs a test on real player machines and signed binaries. Details and the full list:
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 Three programs and one library:
 

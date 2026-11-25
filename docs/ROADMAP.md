@@ -21,3 +21,6 @@
 * Cloud drives (Google Drive, Dropbox, OneDrive) work through direct-download links but have quotas and can answer with a
   web page; they are untested against the real services. See [HOSTING.md](HOSTING.md).
 * Self-update and installers are not there yet; ship the program in your client package.
+* The Windows programs are **not code-signed** (SmartScreen warns), and the apps have only run in a virtual machine, never on
+  a real player's PC (slow lines, antivirus, locked files) and not been clicked through by a person. This is why v0.1.0 is
+  a **pre-release**; a stable v1.0 waits for both.
