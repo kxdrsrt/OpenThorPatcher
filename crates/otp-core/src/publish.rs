@@ -64,7 +64,9 @@ pub fn odinguard_hook(p: &Project, log: &mut dyn FnMut(&str)) -> Result<String> 
         scan.push(opt.into());
     }
     scan.push(o.profile.clone().into());
+    let before = std::fs::read(&o.profile).ok();
     let a = run(scan)?;
+    let changed = std::fs::read(&o.profile).ok() != before;
     let b = run(vec!["grf-manifest".into(), o.profile.clone().into(), "-o".into(), p.site.join("grf-manifest.json").into()])?;
     // signed like the patch list, so a mirror cannot change what the patcher compares against
     if let Some(seed) = &p.signing_seed {
@@ -73,10 +75,14 @@ pub fn odinguard_hook(p: &Project, log: &mut dyn FnMut(&str)) -> Result<String> 
         write_atomic(&p.site.join("grf-manifest.json.sig"), sign::sign(seed, &bytes)?.as_bytes())?;
     }
     let text = format!("{a}\n{b}");
-    for l in text.lines() {
+    for l in text.lines().filter(|l| changed || !l.contains("rebuild and deploy")) {
         log(&format!("OdinGuard: {l}"));
     }
-    log("OdinGuard: rebuild and deploy the server config (og build) before players patch, or they are reported as grf:modified");
+    if changed {
+        log("OdinGuard: NEW GRF versions in the profile: rebuild and deploy the server config (og build) before you upload, or players are reported as grf:modified");
+    } else {
+        log("OdinGuard: no new GRF versions; the server config is up to date");
+    }
     Ok(text)
 }
 

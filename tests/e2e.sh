@@ -446,7 +446,7 @@ if [ -n "${OG:-}" ]; then
 else
   OGBIN="$D/og"
   printf '%s\n' '#!/bin/sh' 'echo "$*" >> "$(dirname "$0")/og.args"' \
-    'if [ "$1" = grf-manifest ]; then echo "{\"files\":[{\"name\":\"data.grf\",\"size\":1,\"tail_sha256\":\"00\",\"required\":true}]}" > "$4"; echo "1 GRF version(s) written to $4"; else echo "data.grf scanned"; fi' > "$OGBIN"
+    'if [ "$1" = grf-manifest ]; then echo "{\"files\":[{\"name\":\"data.grf\",\"size\":1,\"tail_sha256\":\"00\",\"required\":true}]}" > "$4"; echo "1 GRF version(s) written to $4"; else echo "data.grf scanned"; for a; do last=$a; done; grep -q scanned "$last" || echo "# scanned" >> "$last"; fi' > "$OGBIN"
   chmod +x "$OGBIN"
   touch "$D/og.profile.toml"
 fi
@@ -459,14 +459,16 @@ grep -q "grf-manifest.json" "$D/dry.log" || { cat "$D/dry.log"; fail "the dry ru
 [ ! -e "$S/grf-manifest.json" ] || fail "the dry run wrote the GRF manifest"
 "$OTP" publish --project "$D/project.json" > "$D/pub.log" 2>&1 || { cat "$D/pub.log"; fail "publish with the OdinGuard hook"; }
 [ -s "$S/grf-manifest.json" ] || { cat "$D/pub.log"; fail "no grf-manifest.json in the site"; }
-grep -q "before players patch" "$D/pub.log" || { cat "$D/pub.log"; fail "no hint to deploy the server config first"; }
+grep -q "before you upload" "$D/pub.log" || { cat "$D/pub.log"; fail "no hint to deploy the server config first"; }
 if [ -z "${OG:-}" ]; then
   grep -q "^grf-scan --keep-previous --client $M --optional odin-dark.grf $D/og.profile.toml$" "$D/og.args" || { cat "$D/og.args"; fail "og grf-scan arguments"; }
   grep -q "^grf-manifest $D/og.profile.toml -o $S/grf-manifest.json$" "$D/og.args" || { cat "$D/og.args"; fail "og grf-manifest arguments"; }
 else
   grep -q '"name": "data.grf"' "$S/grf-manifest.json" || { cat "$S/grf-manifest.json"; fail "real og: data.grf missing in the manifest"; }
 fi
-ok "OdinGuard hook: og grf-scan (keep previous versions) and grf-manifest.json in the site, not in a dry run"
+"$OTP" publish --project "$D/project.json" > "$D/pub2.log" 2>&1 || { cat "$D/pub2.log"; fail "second publish with the OdinGuard hook"; }
+grep -q "no new GRF versions" "$D/pub2.log" && ! grep -q "rebuild and deploy" "$D/pub2.log" || { cat "$D/pub2.log"; fail "deploy hint although the profile did not change"; }
+ok "OdinGuard hook: og grf-scan (keep previous versions) and grf-manifest.json in the site, not in a dry run; deploy hint only when the profile changed"
 P="$D/player"; mkdir -p "$P"; cp "$M/data.grf" "$P/data.grf"
 "$OTP" patch --url "file://$S" --client "$P" > "$D/patch.log" 2>&1 || { cat "$D/patch.log"; fail "patch with a GRF manifest on the site"; }
 if [ -z "${OG:-}" ]; then
