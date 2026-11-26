@@ -483,4 +483,18 @@ if "$OTP" publish --project "$D/p2.json" > "$D/pub2.log" 2>&1; then fail "a miss
 grep -q "could not be started" "$D/pub2.log" || { cat "$D/pub2.log"; fail "no clear message for a missing og"; }
 ok "OdinGuard hook: a missing og program fails the publish with a clear message"
 
+# ---- the master client is never patched (an unpublished change there stays) --------------------------------------------
+D="$W/master-guard"; M="$D/m"; S="$D/site"; mkdir -p "$M"
+echo one > "$M/a.cfg"
+"$OTP" keygen --out "$D/k" > /dev/null
+"$OTP" init --project "$D/p.json" --server T --client "$M" --site "$S" --base-url "file://$S/" --seed "$D/k/signing.seed" > /dev/null
+"$OTP" publish --project "$D/p.json" > /dev/null || fail "master-guard publish"
+[ -f "$M/_patch/master" ] || fail "publish did not mark the master client"
+echo two > "$M/a.cfg"
+"$OTP" patch --url "file://$S/" --client "$M" --pub "$D/k/patcher.pub" > "$D/patch.log" 2>&1 || { cat "$D/patch.log"; fail "patching the master"; }
+grep -q two "$M/a.cfg" && grep -q "master client" "$D/patch.log" || { cat "$D/patch.log"; fail "the master client was patched back"; }
+P="$D/player"; mkdir -p "$P"
+"$OTP" patch --url "file://$S/" --client "$P" --pub "$D/k/patcher.pub" > /dev/null 2>&1 && grep -q one "$P/a.cfg" || fail "a player copy is still patched"
+ok "master client: publish marks it, the patcher leaves an unpublished change alone; players are patched"
+
 echo "ALL OK"

@@ -120,6 +120,10 @@ keep_backup = true
 `patcher.state` (JSON, next to the executable): last applied id per target, hashes of the GRFs after the last
 successful patch, the player's pack choices. Deleting it forces a full check against the patch list.
 
+`_patch/master` (0.4.3) is written by `otp publish` into the master client. A patcher started in that folder does not
+patch it (it reports the folder as the operator's master and only starts the game), so an unpublished change in the
+master is never reverted to the published state. Delete the file to patch the folder like a player's.
+
 ## 6. Starting the game: launch ticket (0.4.0)
 
 Play installs pending updates first, then starts `client.exe` with a **launch ticket**:

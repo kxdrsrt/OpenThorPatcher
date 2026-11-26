@@ -477,6 +477,7 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     if dry_run {
         return Ok(rep);
     }
+    crate::sync::mark_master(&p.client, &p.server)?;
     // OdinGuard first: when og fails, the old patch list stays the published one
     if p.odinguard.is_some() {
         rep.odinguard = Some(odinguard_hook(p, log)?);

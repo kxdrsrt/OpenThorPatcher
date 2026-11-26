@@ -198,6 +198,23 @@ fn patch_dir(dir: &Path) -> PathBuf {
     dir.join("_patch")
 }
 
+/// Marker that `otp publish` writes into the master client. A patcher in that folder never patches it: the master is
+/// the truth, and an unpublished change there must not be reverted to the published state.
+pub const MASTER_MARKER: &str = "master";
+
+/// Is this client folder the operator's master client (published from with `otp publish`)?
+pub fn is_master(dir: &Path) -> bool {
+    patch_dir(dir).join(MASTER_MARKER).is_file()
+}
+
+/// Marks a folder as the master client (see [`is_master`]).
+pub fn mark_master(dir: &Path, server: &str) -> Result<()> {
+    let d = patch_dir(dir);
+    std::fs::create_dir_all(&d).map_err(|e| io_err(&d, e))?;
+    let f = d.join(MASTER_MARKER);
+    std::fs::write(&f, format!("master client of {server}: OpenThor does not patch this folder (delete this file to patch it like a player)\n")).map_err(|e| io_err(&f, e))
+}
+
 fn load_state(dir: &Path) -> State {
     std::fs::read(patch_dir(dir).join("state.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
@@ -483,6 +500,10 @@ fn remove_paths(cfg: &Config, list: &PatchList, sum: &mut Summary, ev: &mut dyn 
 
 pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
     cfg.check_cancel()?;
+    if is_master(&cfg.client_dir) {
+        ev(Event::Info("this is the operator's master client (_patch/master): it is not patched; publish your changes instead".into()));
+        return Ok(Summary::default());
+    }
     if let Ok(mut g) = DEAD.lock() {
         g.clear();
     }
