@@ -169,7 +169,8 @@ pub fn parse_news(bytes: &[u8], base: &str) -> Result<Vec<NewsItem>> {
             (None, Some(h)) => html_to_markup(h, base),
             _ => String::new(),
         };
-        out.push(NewsItem { date, title, body });
+        let lang = it["lang"].as_str().or_else(|| it["locale"].as_str()).unwrap_or("").trim().to_ascii_lowercase();
+        out.push(NewsItem { date, title, body, lang });
     }
     Ok(out)
 }
@@ -228,9 +229,11 @@ mod tests {
     #[test]
     fn midgardcp_news_and_status() {
         let n = parse_news(br#"{"total":2,"items":[{"id":2,"title":"Patch day","html":"<p>New maps</p>","realm":null,"pinned":false,"published_at":"2026-11-26T10:00:00Z"},{"id":1,"title":"","html":"x"}]}"#, "").unwrap();
-        assert_eq!(n, vec![NewsItem { date: "2026-11-26".into(), title: "Patch day".into(), body: "New maps".into() }]);
+        assert_eq!(n, vec![NewsItem { date: "2026-11-26".into(), title: "Patch day".into(), body: "New maps".into(), lang: String::new() }]);
         let own = parse_news(br#"[{"date":"2026-11-01","title":"Hi","body":"- a"}]"#, "").unwrap();
         assert_eq!(own[0].body, "- a");
+        let langs = parse_news(br#"[{"title":"Hallo","body":"x","lang":"DE"},{"title":"Hi","body":"x","locale":"en"}]"#, "").unwrap();
+        assert_eq!((langs[0].lang.as_str(), langs[1].lang.as_str()), ("de", "en"), "the panel's language travels with the item");
         let s = br#"[{"id":"hr","name":"BurningRO HR","state":"online","players":42},{"id":"mlr","name":"M-LR","state":"degraded","players":null}]"#;
         assert_eq!(parse_status(s, "mlr").unwrap(), RealmState { name: "M-LR".into(), state: "degraded".into(), players: None });
         assert_eq!(parse_status(s, "").unwrap().players, Some(42));

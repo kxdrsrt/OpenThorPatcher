@@ -80,6 +80,9 @@ struct Settings {
     parallel: Option<usize>,
     #[serde(default)]
     max_kbps: Option<u64>,
+    /// Language of the window (`de`, `en`, ...); missing or `auto` = the language of Windows.
+    #[serde(default)]
+    language: Option<String>,
 }
 
 struct App {
@@ -162,6 +165,8 @@ struct Init {
     max_kbps: u64,
     error: Option<String>,
     version: String,
+    /// The player's choice, `auto` when none
+    language: String,
 }
 
 #[tauri::command]
@@ -175,14 +180,16 @@ fn init(app: tauri::AppHandle) -> Init {
     let parallel = s.parallel.or(cfg.as_ref().ok().and_then(|c| c.parallel)).unwrap_or(sync::DEFAULT_PARALLEL);
     let max_kbps = s.max_kbps.or(cfg.as_ref().ok().and_then(|c| c.max_kbps)).unwrap_or(0);
     let dir = client_dir(&app).display().to_string();
+    let language = s.language.clone().filter(|l| !l.is_empty()).unwrap_or_else(|| "auto".into());
     match cfg {
-        Ok(c) => Init { name: c.name, client_dir: dir, auto_update: s.auto_update.unwrap_or(true), keep_backup: s.keep_backup.unwrap_or(false), parallel, max_kbps, error: None, version },
-        Err(e) => Init { name: "OpenThor Patcher".into(), client_dir: dir, auto_update: true, keep_backup: false, parallel, max_kbps, error: Some(e), version },
+        Ok(c) => Init { name: c.name, client_dir: dir, auto_update: s.auto_update.unwrap_or(true), keep_backup: s.keep_backup.unwrap_or(false), parallel, max_kbps, error: None, version, language },
+        Err(e) => Init { name: "OpenThor Patcher".into(), client_dir: dir, auto_update: true, keep_backup: false, parallel, max_kbps, error: Some(e), version, language },
     }
 }
 
 #[tauri::command]
-fn set_settings(app: tauri::AppHandle, client_dir: Option<String>, auto_update: bool, keep_backup: bool, parallel: Option<usize>, max_kbps: Option<u64>) -> Res<()> {
+#[allow(clippy::too_many_arguments)]
+fn set_settings(app: tauri::AppHandle, client_dir: Option<String>, auto_update: bool, keep_backup: bool, parallel: Option<usize>, max_kbps: Option<u64>, language: Option<String>) -> Res<()> {
     let mut s = load_settings(&app);
     if let Some(d) = client_dir {
         if !Path::new(&d).is_dir() {
@@ -198,6 +205,13 @@ fn set_settings(app: tauri::AppHandle, client_dir: Option<String>, auto_update: 
     if let Some(k) = max_kbps {
         s.max_kbps = Some(k);
     }
+    if let Some(l) = language {
+        let l = l.trim().to_ascii_lowercase();
+        if !l.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') || l.len() > 16 {
+            return Err(format!("unknown language {l}"));
+        }
+        s.language = Some(l);
+    }
     save_settings(&app, &s)
 }
 
@@ -205,6 +219,7 @@ fn set_settings(app: tauri::AppHandle, client_dir: Option<String>, auto_update: 
 struct PackInfo {
     id: String,
     title: String,
+    titles: std::collections::BTreeMap<String, String>,
     on: bool,
     locked: bool,
 }
@@ -266,7 +281,7 @@ async fn check(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
             .as_ref()
             .and_then(|l| l.data_ini.as_ref())
             .map(|d| (d, sync::pack_choices(&c.client_dir, d)))
-            .map(|(d, prefs)| d.packs.iter().map(|p| PackInfo { id: p.id.clone(), title: if p.title.is_empty() { p.id.clone() } else { p.title.clone() }, on: p.locked || prefs.packs.get(&p.id).copied().unwrap_or(p.default), locked: p.locked }).collect())
+            .map(|(d, prefs)| d.packs.iter().map(|p| PackInfo { id: p.id.clone(), title: if p.title.is_empty() { p.id.clone() } else { p.title.clone() }, titles: p.titles.clone(), on: p.locked || prefs.packs.get(&p.id).copied().unwrap_or(p.default), locked: p.locked }).collect())
             .unwrap_or_default();
         let game = l.as_ref().and_then(|l| l.client.clone()).filter(|g| !g.exe.is_empty()).unwrap_or_else(|| ClientCfg {
             exe: cfg.game_exe.clone().unwrap_or_default(),
@@ -541,6 +556,31 @@ fn get_theme(app: tauri::AppHandle) -> Option<Theme> {
     Some(Theme { name: j.name, author: j.author, css: inline_urls(&css, &dir), vars: j.vars, logo })
 }
 
+/// Extra languages of the window: `patcher-theme/locales/<lang>.json` in the client folder (`{"play": "Jouer", ...}`, the
+/// keys of `ui/locales/en.js`). They reach the players with the patch like the theme, so a server can add a language
+/// without a new patcher; a file for a built-in language overrides single texts.
+#[tauri::command]
+fn get_locales(app: tauri::AppHandle) -> std::collections::BTreeMap<String, serde_json::Value> {
+    let mut out = std::collections::BTreeMap::new();
+    let dir = client_dir(&app).join("patcher-theme").join("locales");
+    for e in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        let (Some(stem), Some("json")) = (p.file_stem().and_then(|s| s.to_str()), p.extension().and_then(|s| s.to_str())) else { continue };
+        let lang = stem.to_ascii_lowercase();
+        if lang.len() > 16 || !lang.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            continue;
+        }
+        let Ok(b) = std::fs::read(&p) else { continue };
+        if b.len() > 1 << 20 {
+            continue;
+        }
+        if let Ok(v @ serde_json::Value::Object(_)) = serde_json::from_slice::<serde_json::Value>(&b) {
+            out.insert(lang, v);
+        }
+    }
+    out
+}
+
 /// Downloads the newer patcher the signed list offers, puts it in place of this program, starts it and exits.
 #[tauri::command]
 async fn update_patcher(app: tauri::AppHandle, st: State<'_, Arc<App>>) -> Res<String> {
@@ -612,7 +652,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
-        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url, server_status, update_patcher, panel_status])
+        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url, server_status, update_patcher, panel_status, get_locales])
         .run(tauri::generate_context!())
         .expect("error while running OpenThor Patcher");
 }

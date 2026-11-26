@@ -112,6 +112,10 @@ pub struct NewsItem {
     /// Plain text with a tiny markup: blank line = paragraph, `- ` = list item, `**bold**`.
     #[serde(default)]
     pub body: String,
+    /// Language of this item (`de`, `en`, ...). Empty = for everybody. When items carry languages, the patcher shows the
+    /// player's language, else English, else the first language there is.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub lang: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -126,6 +130,9 @@ pub struct ChangeEntry {
     /// One line per change.
     #[serde(default)]
     pub items: Vec<String>,
+    /// Language of this entry, as for news.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub lang: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -163,6 +170,9 @@ pub struct Pack {
     pub file: String,
     #[serde(default)]
     pub title: String,
+    /// The title in other languages (`{"de": "Darkworld-Karten"}`); `title` is the fallback.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub titles: std::collections::BTreeMap<String, String>,
     /// Switched on for a new player.
     #[serde(default)]
     pub default: bool,

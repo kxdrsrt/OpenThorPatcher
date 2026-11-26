@@ -29,9 +29,9 @@ function markup(text) {
 
 function renderNews(c) {
   const root = $("#p-news");
-  const items = c?.news || [];
+  const items = I18N.pick(c?.news);
   if (!items.length) {
-    root.innerHTML = c?.notice ? `<article class="news-item"><h4>${esc(c.server || "")}</h4>${markup(c.notice)}</article>` : `<div class="empty-note">No news yet.</div>`;
+    root.innerHTML = c?.notice ? `<article class="news-item"><h4>${esc(c.server || "")}</h4>${markup(c.notice)}</article>` : `<div class="empty-note">${esc(t("news.none"))}</div>`;
     return;
   }
   root.innerHTML = items.map((n) => `<article class="news-item"><time>${esc(n.date)}</time><h4>${esc(n.title)}</h4>${markup(n.body)}</article>`).join("");
@@ -39,8 +39,8 @@ function renderNews(c) {
 
 function renderChangelog(c) {
   const root = $("#p-changelog");
-  const items = c?.changelog || [];
-  if (!items.length) { root.innerHTML = `<div class="empty-note">No changelog yet.</div>`; return; }
+  const items = I18N.pick(c?.changelog);
+  if (!items.length) { root.innerHTML = `<div class="empty-note">${esc(t("changelog.none"))}</div>`; return; }
   root.innerHTML = items.map((e) => `<article class="change-entry"><div>${e.version ? `<span class="ver">${esc(e.version)}</span>` : ""}<time>${esc(e.date)}</time></div>${e.title ? `<h4>${esc(e.title)}</h4>` : ""}<ul>${(e.items || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></article>`).join("");
 }
 
@@ -54,7 +54,7 @@ async function refreshOnline() {
   o.hidden = false;
   const down = r.state === "offline";
   o.className = "online " + (r.state === "online" ? "ok" : r.state === "degraded" ? "warn" : down ? "bad" : "neutral");
-  o.textContent = down ? "offline" : r.players != null ? `${r.players} online` : r.state === "unknown" ? "" : r.state;
+  o.textContent = down ? t("online.offline") : r.players != null ? t("online.n", { n: r.players }) : r.state === "unknown" ? "" : r.state;
   o.hidden = !o.textContent;
   o.title = `${r.name}: ${r.state}`;
 }
@@ -69,7 +69,7 @@ async function refreshServers() {
   for (const s of list) {
     const e = document.createElement("span");
     e.className = "srv-item " + (s.ok ? "ok" : "bad");
-    e.title = s.ok ? `${s.name}: online (${s.ms} ms)` : `${s.name}: not reachable`;
+    e.title = s.ok ? t("srv.ok", { name: s.name, ms: s.ms }) : t("srv.bad", { name: s.name });
     e.innerHTML = '<i class="dot"></i><b></b>';
     e.querySelector("b").textContent = s.name;
     root.appendChild(e);
@@ -81,7 +81,7 @@ function setTab(name) {
   document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("active", p.id === "p-" + name));
 }
 
-const openUrl = (u) => invoke("open_url", { url: u }).catch((e) => toast(String(e), "bad"));
+const openUrl = (u) => invoke("open_url", { url: u }).catch((e) => toast(I18N.err(e), "bad"));
 
 const ICONS = [[/discord\./, "discord"], [/github\./, "github"], [/gitlab\./, "gitlab"], [/youtu(\.be|be\.)/, "youtube"], [/(^|\.)(x|twitter)\.com/, "x"], [/facebook\.|fb\.com/, "facebook"], [/reddit\./, "reddit"], [/twitch\./, "twitch"], [/(^|\.)t\.me|telegram\./, "telegram"], [/instagram\./, "instagram"], [/tiktok\./, "tiktok"]];
 function iconFor(l) {
@@ -170,10 +170,10 @@ const upToDate = (s) => !s.files_updated.length && !s.patches_applied.length && 
 
 function need(s) {
   const parts = [];
-  if (s.patches_applied.length) parts.push(`${s.patches_applied.length} patch${s.patches_applied.length > 1 ? "es" : ""}`);
-  if (s.files_updated.length) parts.push(`${s.files_updated.length} file${s.files_updated.length > 1 ? "s" : ""}`);
-  if (s.repaired.length) parts.push(`${s.repaired.length} to repair`);
-  if (s.removed.length) parts.push(`${s.removed.length} to remove`);
+  if (s.patches_applied.length) parts.push(t("need.patches", { n: s.patches_applied.length }));
+  if (s.files_updated.length) parts.push(t("need.files", { n: s.files_updated.length }));
+  if (s.repaired.length) parts.push(t("need.repair", { n: s.repaired.length }));
+  if (s.removed.length) parts.push(t("need.remove", { n: s.removed.length }));
   return parts.join(", ");
 }
 
@@ -190,25 +190,31 @@ function buttons() {
   $("#btn-play").classList.toggle("primary", !has);
 }
 
+/* The state box for the last check, in the current language (also used when the player switches the language). */
+function showChecked() {
+  if (!checked) return;
+  news();
+  if (!checked.open) state("warn", t("state.closed"), checked.message || t("state.maintenance"), "warn");
+  else if (upToDate(checked.summary)) state("ok", t("state.ok"), checked.server, "check");
+  else state("warn", t("state.updates"), need(checked.summary), "update");
+  buttons();
+  renderPacks();
+}
+
 async function check(force = false) {
-  state("busy", "Checking for updates…", "", "update");
+  state("busy", t("state.checking"), "", "update");
   bar(0, 0);
   try {
     checked = await invoke("check", { force });
   } catch (e) {
     checked = null;
     idle();
-    state("bad", "Cannot reach the server", String(e), "error");
+    state("bad", t("state.unreachable"), I18N.err(e), "error");
     buttons();
     return null;
   }
   idle();
-  news();
-  if (!checked.open) state("warn", "Patching is closed", checked.message || "The server is in maintenance.", "warn");
-  else if (upToDate(checked.summary)) state("ok", "Up to date", checked.server, "check");
-  else state("warn", "Updates available", need(checked.summary), "update");
-  buttons();
-  renderPacks();
+  showChecked();
   refreshServers();
   refreshOnline();
   if (checked.update_warning) { toast(checked.update_warning, "warn"); log(checked.update_warning); }
@@ -219,10 +225,10 @@ async function check(force = false) {
 async function selfUpdate() {
   patching = true;
   buttons();
-  state("busy", `Updating the patcher to ${checked.update.version}…`, "It restarts by itself.", "update");
+  state("busy", t("state.selfupdate", { v: checked.update.version }), t("state.selfupdate.text"), "update");
   bar(0, 0);
   try { await invoke("update_patcher"); }
-  catch (e) { patching = false; toast("Patcher update failed: " + String(e), "bad"); log("error: " + String(e)); buttons(); return false; }
+  catch (e) { patching = false; toast(t("toast.selfUpdateFailed", { e: I18N.err(e) }), "bad"); log(t("log.error", { e: String(e) })); buttons(); return false; }
   return true;
 }
 
@@ -231,16 +237,16 @@ async function patch(force = false) {
   patching = true;
   multi = false;
   $("#log").textContent = "";
-  state("busy", "Updating…", "Do not close the patcher.", "update");
+  state("busy", t("state.updating"), t("state.updating.text"), "update");
   bar(0, 0);
   buttons();
   try {
     const s = await invoke("patch", { force });
-    toast(upToDate(s) ? "Everything is up to date." : "Update finished.");
+    toast(upToDate(s) ? t("toast.allGood") : t("toast.updated"));
   } catch (e) {
     const m = String(e);
-    if (m === "cancelled") toast("Update cancelled. Nothing was damaged; the next start continues.", "warn");
-    else { toast(m, "bad"); log("error: " + m); }
+    if (m === "cancelled") toast(t("toast.cancelled"), "warn");
+    else { toast(I18N.err(m), "bad"); log(t("log.error", { e: m })); }
   } finally { patching = false; }
   await check(false);
 }
@@ -254,10 +260,11 @@ function renderPacks() {
   list.forEach((p) => {
     const l = document.createElement("label");
     l.className = "switch-row";
-    l.innerHTML = `<span>${esc(p.title)}${p.locked ? "<small>required by the server</small>" : ""}</span><span class="switch"><input type="checkbox" ${p.on ? "checked" : ""} ${p.locked ? "disabled" : ""}><i></i></span>`;
+    const title = I18N.local(p.titles, p.title);
+    l.innerHTML = `<span>${esc(title)}${p.locked ? `<small>${esc(t("pack.required"))}</small>` : ""}</span><span class="switch"><input type="checkbox" ${p.on ? "checked" : ""} ${p.locked ? "disabled" : ""}><i></i></span>`;
     l.querySelector("input").addEventListener("change", async (e) => {
-      try { await invoke("set_pack", { id: p.id, on: e.target.checked }); toast(`${p.title} ${e.target.checked ? "on" : "off"}. Restart the game to apply it.`); }
-      catch (err) { e.target.checked = !e.target.checked; toast(String(err), "bad"); }
+      try { await invoke("set_pack", { id: p.id, on: e.target.checked }); p.on = e.target.checked; toast(t(e.target.checked ? "pack.on" : "pack.off", { title })); }
+      catch (err) { e.target.checked = !e.target.checked; toast(I18N.err(err), "bad"); }
     });
     root.appendChild(l);
   });
@@ -269,6 +276,7 @@ async function openSettings() {
   $("#s-bak").checked = info.keep_backup;
   $("#s-par").value = info.parallel;
   $("#s-kbps").value = info.max_kbps;
+  langOptions();
   $("#scrim").hidden = false;
   $("#dlg").showModal();
 }
@@ -277,12 +285,35 @@ async function saveSettings() {
   try {
     const parallel = Math.min(16, Math.max(1, parseInt($("#s-par").value, 10) || 4));
     const maxKbps = Math.max(0, parseInt($("#s-kbps").value, 10) || 0);
-    await invoke("set_settings", { clientDir: $("#s-dir").value, autoUpdate: $("#s-auto").checked, keepBackup: $("#s-bak").checked, parallel, maxKbps });
+    await invoke("set_settings", { clientDir: $("#s-dir").value, autoUpdate: $("#s-auto").checked, keepBackup: $("#s-bak").checked, parallel, maxKbps, language: info.language });
     const changed = $("#s-dir").value !== info.client_dir;
     info.client_dir = $("#s-dir").value; info.auto_update = $("#s-auto").checked; info.keep_backup = $("#s-bak").checked;
     info.parallel = parallel; info.max_kbps = maxKbps;
     if (changed) { await loadTheme(); check(false); }
-  } catch (e) { toast(String(e), "bad"); }
+  } catch (e) { toast(I18N.err(e), "bad"); }
+}
+
+/* Language: the player's choice from the settings, "auto" = the system language. */
+function langOptions() {
+  const sel = $("#s-lang");
+  sel.innerHTML = "";
+  const auto = document.createElement("option");
+  auto.value = "auto";
+  auto.textContent = t("set.language.auto");
+  sel.appendChild(auto);
+  for (const l of I18N.available()) {
+    const o = document.createElement("option");
+    o.value = l.id;
+    o.textContent = l.name;
+    sel.appendChild(o);
+  }
+  sel.value = info.language && (info.language === "auto" || I18N.has(info.language)) ? info.language : "auto";
+}
+
+function useLanguage(pref) {
+  I18N.set(I18N.resolve(pref, navigator.languages || [navigator.language]));
+  footTheme();
+  showChecked();
 }
 
 /* An operator theme (client folder / patcher-theme) replaces the built-in "Midgard Night": its CSS goes after the
@@ -295,7 +326,21 @@ async function loadTheme() {
   style.textContent = th ? th.css : "";
   for (const [k, v] of Object.entries(th?.vars || {})) root.style.setProperty(k, v);
   if (th?.logo) $("#logo").src = th.logo;
-  $("#foot-theme").textContent = th ? `Theme: ${th.name}${th.author ? " by " + th.author : ""}` : "Theme: Midgard Night";
+  theme = th;
+  footTheme();
+}
+
+let theme = null;
+function footTheme() {
+  const name = theme ? theme.name : "Midgard Night";
+  $("#foot-theme").textContent = theme && theme.author ? t("theme.by", { name, author: theme.author }) : t("theme", { name });
+}
+
+/* Languages the server ships in its theme folder (patcher-theme/locales/<lang>.json). */
+async function loadLocales() {
+  let extra = {};
+  try { extra = (await invoke("get_locales")) || {}; } catch { extra = {}; }
+  for (const [l, d] of Object.entries(extra)) I18N.add(l, d);
 }
 
 function winCall(fn) {
@@ -305,10 +350,11 @@ function winCall(fn) {
 $("#btn-settings").onclick = openSettings;
 $("#btn-min").onclick = () => winCall("minimize");
 $("#btn-close").onclick = () => winCall("close");
-$("#s-pick").onclick = async () => { const d = await T.dialog.open({ directory: true, title: "Client folder" }); if (d) $("#s-dir").value = d; };
+$("#s-pick").onclick = async () => { const d = await T.dialog.open({ directory: true, title: t("set.dir") }); if (d) $("#s-dir").value = d; };
+$("#s-lang").onchange = () => { info.language = $("#s-lang").value; useLanguage(info.language); langOptions(); };
 $("#dlg").addEventListener("close", () => { $("#scrim").hidden = true; saveSettings(); });
 $("#btn-update").onclick = () => patch(false);
-$("#btn-check").onclick = async () => { const c = await check(true); if (c && !upToDate(c.summary)) patch(true); else if (c) toast("All files match the server."); };
+$("#btn-check").onclick = async () => { const c = await check(true); if (c && !upToDate(c.summary)) patch(true); else if (c) toast(t("toast.filesOk")); };
 $("#btn-cancel").onclick = () => { invoke("cancel"); $("#btn-cancel").disabled = true; };
 $("#btn-web").onclick = () => checked?.website && openUrl(checked.website);
 // links inside news text open in the player's browser, never inside the patcher window
@@ -321,15 +367,15 @@ $("#btn-play").onclick = async () => {
   if (patching || $("#btn-play").disabled) return;
   if (checked && checked.open && !upToDate(checked.summary)) {
     await patch(false);
-    if (!checked || !upToDate(checked.summary)) { toast("The client is not up to date yet; the game was not started.", "warn"); return; }
+    if (!checked || !upToDate(checked.summary)) { toast(t("toast.notReady"), "warn"); return; }
   }
   const b = $("#btn-play");
   b.disabled = true;
-  try { await invoke("play"); toast("Starting the game…"); }
-  catch (e) { const m = String(e); toast(m, m.startsWith("The game is") ? "warn" : "bad"); }
+  try { await invoke("play"); toast(t("toast.starting")); }
+  catch (e) { const m = String(e); toast(I18N.err(m), m.startsWith("The game is") ? "warn" : "bad"); }
   setTimeout(() => { b.disabled = false; buttons(); }, 8000);
 };
-$("#btn-setup").onclick = () => invoke("setup").catch((e) => toast(String(e), "bad"));
+$("#btn-setup").onclick = () => invoke("setup").catch((e) => toast(I18N.err(e), "bad"));
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
 setInterval(() => { if (!patching) { refreshServers(); refreshOnline(); } }, 30000);
@@ -345,15 +391,17 @@ setInterval(() => { if (!patching) { refreshServers(); refreshOnline(); } }, 300
       multi = true;
       $("#p-size").textContent = `${human(p.done)} / ${human(p.total)}`;
       bar(p.done, p.total);
-    } else if (p.kind === "applied") { log(`${p.target}: patch ${p.id} applied`); bar(0, 0); $("#p-name").textContent = "Applying…"; $("#p-size").textContent = ""; }
-    else if (p.kind === "removed") log("removed " + p.path);
+    } else if (p.kind === "applied") { log(t("log.applied", { target: p.target, id: p.id })); bar(0, 0); $("#p-name").textContent = t("state.applying"); $("#p-size").textContent = ""; }
+    else if (p.kind === "removed") log(t("log.removed", { path: p.path }));
   });
   info = await invoke("init");
+  await loadLocales();
+  useLanguage(info.language);
   $("#name").textContent = info.name;
   $("#foot-ver").textContent = `OpenThor Patcher v${info.version}`;
   document.title = info.name + " Patcher";
   await loadTheme();
-  if (info.error) { state("bad", "Not configured", info.error, "error"); idle(); buttons(); return; }
+  if (info.error) { state("bad", t("state.unconfigured"), I18N.err(info.error), "error"); idle(); buttons(); return; }
   const c = await check(false);
   if (c && c.update && await selfUpdate()) return;
   if (c && c.open && !upToDate(c.summary) && info.auto_update) patch(false);

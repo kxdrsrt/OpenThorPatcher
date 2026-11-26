@@ -189,25 +189,45 @@ function renderOrder() {
 function renderPacks() {
   const ini = project.data_ini || { packs: [] };
   const t = $("#packs");
-  t.innerHTML = '<thead><tr><th>Id</th><th>GRF file</th><th>Title</th><th>On by default</th><th>Required</th><th></th></tr></thead>';
+  t.innerHTML = '<thead><tr><th>Id</th><th>GRF file</th><th>Title</th><th>Title (Deutsch)</th><th>On by default</th><th>Required</th><th></th></tr></thead>';
   const body = el("tbody");
   ini.packs.forEach((p, i) => {
-    const tr = el("tr", null, `<td><input value="${esc(p.id)}" size="10" aria-label="Pack id"></td><td><input value="${esc(p.file)}" size="16" aria-label="Pack file"></td><td><input value="${esc(p.title)}" size="16" aria-label="Pack title"></td>
+    const tr = el("tr", null, `<td><input value="${esc(p.id)}" size="10" aria-label="Pack id"></td><td><input value="${esc(p.file)}" size="16" aria-label="Pack file"></td><td><input value="${esc(p.title)}" size="16" aria-label="Pack title"></td><td><input value="${esc(p.titles?.de || "")}" size="16" aria-label="Pack title in German"></td>
       <td><span class="switch"><input type="checkbox" ${p.default ? "checked" : ""} aria-label="On by default"><i></i></span></td><td><span class="switch"><input type="checkbox" ${p.locked ? "checked" : ""} aria-label="Required"><i></i></span></td>
       <td><button class="btn icon small danger" title="Remove" aria-label="Remove pack">${icon("trash")}</button></td>`);
     const ins = tr.querySelectorAll("input");
     const keys = ["id", "file", "title"];
     keys.forEach((k, n) => ins[n].addEventListener("input", () => { p[k] = ins[n].value; touch(); }));
-    ins[3].addEventListener("change", () => { p.default = ins[3].checked; touch(); });
-    ins[4].addEventListener("change", () => { p.locked = ins[4].checked; touch(); });
+    ins[3].addEventListener("input", () => { p.titles = p.titles || {}; if (ins[3].value) p.titles.de = ins[3].value; else delete p.titles.de; touch(); });
+    ins[4].addEventListener("change", () => { p.default = ins[4].checked; touch(); });
+    ins[5].addEventListener("change", () => { p.locked = ins[5].checked; touch(); });
     tr.querySelector("button").onclick = () => { ini.packs.splice(i, 1); touch(); renderPacks(); };
     body.appendChild(tr);
   });
-  if (!ini.packs.length) body.appendChild(el("tr", "empty-row", '<td colspan="6">No optional packs.</td>'));
+  if (!ini.packs.length) body.appendChild(el("tr", "empty-row", '<td colspan="7">No optional packs.</td>'));
   t.appendChild(body);
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+/* Language of a news or changelog entry: empty = every player; with languages the patcher shows the player's language,
+   else English. Other codes than de/en can be typed into the project file (they are kept here). */
+const LANGS = [["", "All languages"], ["de", "Deutsch"], ["en", "English"]];
+function langSelect(item) {
+  const opts = LANGS.some(([v]) => v === (item.lang || "")) ? LANGS : LANGS.concat([[item.lang, item.lang]]);
+  return `<label class="fld"><span>Language</span><select data-lang>${opts.map(([v, n]) => `<option value="${esc(v)}" ${v === (item.lang || "") ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>`;
+}
+function wireLang(card, item, arr, i) {
+  const sel = card.querySelector("select[data-lang]");
+  sel.onchange = () => { if (sel.value) item.lang = sel.value; else delete item.lang; touch(); };
+  const copy = card.querySelector('[data-act="copy"]');
+  if (copy) copy.onclick = () => {
+    const c = JSON.parse(JSON.stringify(item));
+    c.lang = item.lang === "de" ? "en" : "de";
+    if (!item.lang) item.lang = c.lang === "de" ? "en" : "de";
+    arr.splice(i + 1, 0, c); touch(); renderNewsPage();
+  };
+}
 
 function renderNewsPage() {
   bind("#n-url2", () => project.news_url, (v) => (project.news_url = v));
@@ -235,10 +255,11 @@ function renderNewsPage() {
   if (!project.news.length) nl.appendChild(el("div", "note", "No news yet."));
   project.news.forEach((n, i) => {
     const card = el("div", "card form");
-    card.innerHTML = `<label class="fld"><span>Date</span><input value="${esc(n.date)}"></label><label class="fld"><span>Title</span><input value="${esc(n.title)}"></label><label class="fld wide"><span>Text</span><textarea rows="4">${esc(n.body)}</textarea></label><div class="row"><button class="btn small" data-act="up">${icon("up")}Up</button><button class="btn small" data-act="down">${icon("down")}Down</button><button class="btn small danger" data-act="del">${icon("trash")}Remove</button></div>`;
+    card.innerHTML = `<label class="fld"><span>Date</span><input value="${esc(n.date)}"></label>${langSelect(n)}<label class="fld wide"><span>Title</span><input value="${esc(n.title)}"></label><label class="fld wide"><span>Text</span><textarea rows="4">${esc(n.body)}</textarea></label><div class="row"><button class="btn small" data-act="up">${icon("up")}Up</button><button class="btn small" data-act="down">${icon("down")}Down</button><button class="btn small" data-act="copy" title="Adds a copy of this entry for the other language (Deutsch / English) to translate">Copy for another language</button><button class="btn small danger" data-act="del">${icon("trash")}Remove</button></div>`;
     const [d, t] = card.querySelectorAll("input"); const ta = card.querySelector("textarea");
     d.oninput = () => { n.date = d.value; touch(); }; t.oninput = () => { n.title = t.value; touch(); }; ta.oninput = () => { n.body = ta.value; touch(); };
-    card.querySelectorAll("button").forEach((b) => (b.onclick = () => moveItem(project.news, i, b.dataset.act, renderNewsPage)));
+    card.querySelectorAll("button:not([data-act=copy])").forEach((b) => (b.onclick = () => moveItem(project.news, i, b.dataset.act, renderNewsPage)));
+    wireLang(card, n, project.news, i);
     nl.appendChild(card);
   });
   const cl = $("#change-list");
@@ -246,11 +267,12 @@ function renderNewsPage() {
   if (!project.changelog.length) cl.appendChild(el("div", "note", "No changelog yet."));
   project.changelog.forEach((c, i) => {
     const card = el("div", "card form");
-    card.innerHTML = `<label class="fld"><span>Version / patch</span><input value="${esc(c.version)}" placeholder="Patch 12"></label><label class="fld"><span>Date</span><input value="${esc(c.date)}"></label><label class="fld wide"><span>Title (optional)</span><input value="${esc(c.title)}"></label><label class="fld wide"><span>Changes (one per line)</span><textarea rows="4">${esc((c.items || []).join("\n"))}</textarea></label><div class="row"><button class="btn small" data-act="up">${icon("up")}Up</button><button class="btn small" data-act="down">${icon("down")}Down</button><button class="btn small danger" data-act="del">${icon("trash")}Remove</button></div>`;
+    card.innerHTML = `<label class="fld"><span>Version / patch</span><input value="${esc(c.version)}" placeholder="Patch 12"></label><label class="fld"><span>Date</span><input value="${esc(c.date)}"></label>${langSelect(c)}<label class="fld wide"><span>Title (optional)</span><input value="${esc(c.title)}"></label><label class="fld wide"><span>Changes (one per line)</span><textarea rows="4">${esc((c.items || []).join("\n"))}</textarea></label><div class="row"><button class="btn small" data-act="up">${icon("up")}Up</button><button class="btn small" data-act="down">${icon("down")}Down</button><button class="btn small" data-act="copy" title="Adds a copy of this entry for the other language (Deutsch / English) to translate">Copy for another language</button><button class="btn small danger" data-act="del">${icon("trash")}Remove</button></div>`;
     const [v, d, t] = card.querySelectorAll("input"); const ta = card.querySelector("textarea");
     v.oninput = () => { c.version = v.value; touch(); }; d.oninput = () => { c.date = d.value; touch(); }; t.oninput = () => { c.title = t.value; touch(); };
     ta.oninput = () => { c.items = ta.value.split("\n").map((x) => x.trim()).filter(Boolean); touch(); };
-    card.querySelectorAll("button").forEach((b) => (b.onclick = () => moveItem(project.changelog, i, b.dataset.act, renderNewsPage)));
+    card.querySelectorAll("button:not([data-act=copy])").forEach((b) => (b.onclick = () => moveItem(project.changelog, i, b.dataset.act, renderNewsPage)));
+    wireLang(card, c, project.changelog, i);
     cl.appendChild(card);
   });
 }

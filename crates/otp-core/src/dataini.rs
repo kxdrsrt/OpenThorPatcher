@@ -94,7 +94,7 @@ mod tests {
     use super::*;
 
     fn pack() -> Pack {
-        Pack { id: "comp".into(), file: "odin-dark.grf".into(), title: "".into(), default: true, locked: false }
+        Pack { id: "comp".into(), file: "odin-dark.grf".into(), default: true, ..Default::default() }
     }
 
     #[test]

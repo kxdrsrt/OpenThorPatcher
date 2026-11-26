@@ -46,21 +46,21 @@
   <img id="logo" class="logo" src="themes/default/logo.png" alt="OpenThor Patcher" draggable="false" data-tauri-drag-region>
   <div class="frame">
     <header class="bar" data-tauri-drag-region>
-      <div class="who" data-tauri-drag-region><span id="name">OpenThor Patcher</span><i id="sub">Checking for updates…</i><div class="srvrow"><div id="srv" class="srv" aria-label="Server status"></div><span id="online" class="online" hidden></span></div></div>
+      <div class="who" data-tauri-drag-region><span id="name">OpenThor Patcher</span><i id="sub" data-i18n="state.checking">Checking for updates…</i><div class="srvrow"><div id="srv" class="srv" aria-label="Server status" data-i18n-aria="title.status"></div><span id="online" class="online" hidden></span></div></div>
       <div class="wincontrols">
-        <button id="btn-web" class="wbtn pill" hidden title="Open the server's website"><svg class="ic"><use href="#i-globe"/></svg><span>Website</span></button>
-        <button id="btn-settings" class="wbtn" title="Settings" aria-label="Settings"><svg class="ic"><use href="#i-gear"/></svg></button>
-        <button id="btn-min" class="wbtn" title="Minimize" aria-label="Minimize"><svg class="ic"><use href="#i-min"/></svg></button>
-        <button id="btn-close" class="wbtn close" title="Close" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
+        <button id="btn-web" class="wbtn pill" hidden title="Open the server's website" data-i18n-title="web.title"><svg class="ic"><use href="#i-globe"/></svg><span data-i18n="web">Website</span></button>
+        <button id="btn-settings" class="wbtn" title="Settings" aria-label="Settings" data-i18n-title="settings" data-i18n-aria="settings"><svg class="ic"><use href="#i-gear"/></svg></button>
+        <button id="btn-min" class="wbtn" title="Minimize" aria-label="Minimize" data-i18n-title="minimize" data-i18n-aria="minimize"><svg class="ic"><use href="#i-min"/></svg></button>
+        <button id="btn-close" class="wbtn close" title="Close" aria-label="Close" data-i18n-title="close" data-i18n-aria="close"><svg class="ic"><use href="#i-x"/></svg></button>
       </div>
     </header>
 
     <main class="body">
-      <section class="left" aria-label="News and changelog">
+      <section class="left" aria-label="News and changelog" data-i18n-aria="area.news">
         <div class="tabs" role="tablist" id="tabs">
-          <button role="tab" data-tab="news" class="active">News</button>
-          <button role="tab" data-tab="changelog">Changelog</button>
-          <button role="tab" data-tab="web" id="tab-web" hidden>Website</button>
+          <button role="tab" data-tab="news" class="active" data-i18n="tab.news">News</button>
+          <button role="tab" data-tab="changelog" data-i18n="tab.changelog">Changelog</button>
+          <button role="tab" data-tab="web" id="tab-web" hidden data-i18n="tab.web">Website</button>
         </div>
         <div class="box">
           <div id="p-news" class="pane active" role="tabpanel"></div>
@@ -69,20 +69,20 @@
         </div>
       </section>
 
-      <aside class="right" aria-label="Status">
-        <div id="state" class="state"><svg class="ic"><use href="#i-update"/></svg><div><b id="state-title">Checking…</b><span id="state-text"></span></div></div>
+      <aside class="right" aria-label="Status" data-i18n-aria="area.status">
+        <div id="state" class="state"><svg class="ic"><use href="#i-update"/></svg><div><b id="state-title" data-i18n="state.checking">Checking…</b><span id="state-text"></span></div></div>
         <div id="bar" class="progress indeterminate" role="progressbar"><i></i><em id="pct"></em></div>
         <div class="pline"><span id="p-name" class="mono"></span><span id="p-size" class="mono"></span></div>
         <pre id="log" class="out" aria-live="polite"></pre>
         <div class="buttons">
         <div class="row-main">
-          <button id="btn-play" class="btn primary big" disabled><svg class="ic"><use href="#i-play"/></svg>Play</button>
-          <button id="btn-update" class="btn big" hidden><svg class="ic"><use href="#i-update"/></svg>Update</button>
-          <button id="btn-cancel" class="btn big" hidden><svg class="ic"><use href="#i-stop"/></svg>Cancel</button>
+          <button id="btn-play" class="btn primary big" disabled><svg class="ic"><use href="#i-play"/></svg><span data-i18n="play">Play</span></button>
+          <button id="btn-update" class="btn big" hidden><svg class="ic"><use href="#i-update"/></svg><span data-i18n="update">Update</span></button>
+          <button id="btn-cancel" class="btn big" hidden><svg class="ic"><use href="#i-stop"/></svg><span data-i18n="cancel">Cancel</span></button>
         </div>
         <div class="row-sec">
-          <button id="btn-check" class="btn" title="Re-check every file against the server"><svg class="ic"><use href="#i-shield"/></svg>Check files</button>
-          <button id="btn-setup" class="btn" hidden><svg class="ic"><use href="#i-sliders"/></svg>RO Setup</button>
+          <button id="btn-check" class="btn" title="Re-check every file against the server" data-i18n-title="check.title"><svg class="ic"><use href="#i-shield"/></svg><span data-i18n="check">Check files</span></button>
+          <button id="btn-setup" class="btn" hidden><svg class="ic"><use href="#i-sliders"/></svg><span data-i18n="setup">RO Setup</span></button>
         </div>
       </div>
       </aside>
@@ -93,21 +93,25 @@
 
   <dialog id="dlg" aria-labelledby="dlg-title">
     <form method="dialog">
-      <header><h2 id="dlg-title">Settings</h2><button class="btn icon" value="close" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button></header>
+      <header><h2 id="dlg-title" data-i18n="settings">Settings</h2><button class="btn icon" value="close" aria-label="Close" data-i18n-aria="close"><svg class="ic"><use href="#i-x"/></svg></button></header>
       <div class="card form">
-        <label class="fld wide"><span>Client folder</span><span class="inline"><input id="s-dir" readonly><button id="s-pick" type="button" class="btn icon" title="Choose folder" aria-label="Choose folder"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
-        <label class="switch-row"><span>Update automatically on start</span><span class="switch"><input type="checkbox" id="s-auto"><i></i></span></label>
-        <label class="switch-row"><span>Keep the old GRF as .bak after an update<small>off by default: the old file is replaced completely</small></span><span class="switch"><input type="checkbox" id="s-bak"><i></i></span></label>
-        <label class="fld"><span>Downloads at the same time</span><input id="s-par" type="number" min="1" max="16" step="1"></label>
-        <label class="fld"><span>Speed limit (KB/s, 0 = none)</span><input id="s-kbps" type="number" min="0" step="100"></label>
+        <label class="fld wide"><span data-i18n="set.dir">Client folder</span><span class="inline"><input id="s-dir" readonly><button id="s-pick" type="button" class="btn icon" title="Choose folder" aria-label="Choose folder" data-i18n-title="set.pick" data-i18n-aria="set.pick"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+        <label class="switch-row"><span data-i18n="set.auto">Update automatically on start</span><span class="switch"><input type="checkbox" id="s-auto"><i></i></span></label>
+        <label class="switch-row"><span><span data-i18n="set.bak">Keep the old GRF as .bak after an update</span><small data-i18n="set.bak.hint">off by default: the old file is replaced completely</small></span><span class="switch"><input type="checkbox" id="s-bak"><i></i></span></label>
+        <label class="fld"><span data-i18n="set.parallel">Downloads at the same time</span><input id="s-par" type="number" min="1" max="16" step="1"></label>
+        <label class="fld"><span data-i18n="set.kbps">Speed limit (KB/s, 0 = none)</span><input id="s-kbps" type="number" min="0" step="100"></label>
+        <label class="fld"><span data-i18n="set.language">Language</span><select id="s-lang"></select></label>
       </div>
-      <h3 id="packs-title">Options</h3>
+      <h3 id="packs-title" data-i18n="set.options">Options</h3>
       <div id="packs" class="card form"></div>
-      <div class="row"><button class="btn primary" id="s-save" value="save">Done</button></div>
+      <div class="row"><button class="btn primary" id="s-save" value="save" data-i18n="set.done">Done</button></div>
     </form>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </div>
+<script src="i18n.js"></script>
+<script src="locales/en.js"></script>
+<script src="locales/de.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

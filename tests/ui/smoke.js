@@ -9,6 +9,8 @@ async function mk(app, mock) {
   w.addEventListener("error", (e) => w.errors.push(e.message));
   w.HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
   w.__TAURI__ = mock(w);
+  // the scripts index.html loads before app.js (the patcher's languages); the Maker has none
+  for (const f of ["i18n.js", "locales/en.js", "locales/de.js"]) if (fs.existsSync(dir + f)) w.eval(fs.readFileSync(dir + f, "utf8"));
   w.eval(fs.readFileSync(dir + "app.js", "utf8"));
   return w;
 }
@@ -64,6 +66,10 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   d.getElementById("btn-news-add").click(); d.getElementById("btn-change-add").click();
   ok(d.querySelectorAll("#news-list .card").length === 1 && d.querySelectorAll("#change-list .card").length === 1, "maker: news and changelog entries added");
   const ta = d.querySelector("#change-list textarea"); ta.value = "a\nb\n"; ta.dispatchEvent(new w.Event("input"));
+  const nsel = d.querySelector("#news-list select[data-lang]"); nsel.value = "de"; nsel.dispatchEvent(new w.Event("change"));
+  d.querySelector('#news-list [data-act="copy"]').click(); await sleep(20);
+  const langs = [...d.querySelectorAll("#news-list select[data-lang]")].map((x) => x.value).join(",");
+  ok(langs === "de,en", "maker: news language and copy for the other language " + langs);
   d.querySelector("nav button[data-tab=hosting]").click(); await sleep(80);
   ok(d.querySelectorAll("#links tbody tr").length === 2, "maker: upload list (patchlist excluded)");
   const li = d.querySelector("#links tbody tr input"); li.value = "https://drive.google.com/file/d/X/view"; li.dispatchEvent(new w.Event("input"));
@@ -72,12 +78,15 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   d.getElementById("btn-plan").click(); await sleep(150);
   ok(!d.getElementById("plan-wrap").hidden && d.querySelectorAll("#plan tbody tr").length === 2, "maker: plan table");
   ok(saved.length >= 1 && saved[saved.length - 1].url_map["files/odin.grf"], "maker: saved before plan with link");
+  ok(saved[saved.length - 1].news.map((n) => n.lang).join(",") === "de,en", "maker: news languages saved");
   ok(saved[saved.length - 1].game && saved[saved.length - 1].game.max_instances === 1, "maker: game windows limit saved as a number");
   ok(w.errors.length === 0, "maker: no script errors " + w.errors.join(";"));
   // ---- patcher
   const mkp = (summary, extra = {}) => (w) => ({
     core: { invoke: async (c, a) => { switch (c) {
-      case "init": return { name: "TestRO", client_dir: "/c", auto_update: false, keep_backup: true, error: null, version: "0.1.0" };
+      case "init": return { name: "TestRO", client_dir: "/c", auto_update: false, keep_backup: true, error: null, version: "0.1.0", language: extra.language || "auto" };
+      case "get_locales": return extra.locales || {};
+      case "set_settings": w.savedLang = a.language; return null;
       case "get_theme": return null;
       case "server_status": return [{ name: "Login", ok: true, ms: 12 }, { name: "Char", ok: true, ms: 15 }, { name: "Map", ok: false, ms: 2500 }];
       case "open_url": w.opened = (w.opened || []).concat(a.url); return null;
@@ -118,6 +127,28 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   w = await mk("patcher", mkp({ files_updated: [], patches_applied: [], repaired: [], removed: [] }, { open: false, message: "Maintenance" }));
   await sleep(150); d = w.document;
   ok(d.getElementById("state-title").textContent === "Patching is closed", "patcher: maintenance");
+  // ---- languages
+  const deNews = [{ date: "2026-11-26", title: "Hallo", body: "Deutsch", lang: "de" }, { date: "2026-11-26", title: "Hello", body: "English", lang: "en" }, { date: "2026-11-25", title: "Both", body: "für alle" }];
+  w = await mk("patcher", mkp({ files_updated: [], patches_applied: [], repaired: [], removed: [] }, { language: "de", news: deNews, changelog: [{ date: "x", items: ["eins"], lang: "de" }, { date: "x", items: ["one"], lang: "en" }], packs: [{ id: "comp", title: "Competitive", titles: { de: "Darkworld-Karten" }, on: false, locked: false }] }));
+  await sleep(150); d = w.document;
+  ok(d.getElementById("state-title").textContent === "Aktuell" && d.documentElement.lang === "de", "patcher: German from the player's setting");
+  ok(d.querySelector("#btn-play span").textContent === "Spielen" && d.getElementById("btn-settings").title === "Einstellungen", "patcher: static texts in German");
+  const titles = [...d.querySelectorAll("#p-news h4")].map((h) => h.textContent);
+  ok(titles.join("|") === "Hallo|Both", "patcher: German news plus news without a language, English left out");
+  ok(d.querySelectorAll("#p-changelog li").length === 1 && d.querySelector("#p-changelog li").textContent === "eins", "patcher: changelog in German");
+  ok(d.querySelector("#packs label span").textContent === "Darkworld-Karten", "patcher: pack title in German");
+  ok(w.eval('I18N.err("The game is already running 3 times. No more game windows are allowed.")') === "Das Spiel läuft schon 3-mal. Mehr Spielfenster sind nicht erlaubt.", "patcher: program messages translated");
+  ok(w.eval('I18N.err("something new")') === "something new", "patcher: unknown messages stay as they are");
+  d.getElementById("btn-settings").click(); await sleep(20);
+  const sel = d.getElementById("s-lang");
+  ok([...sel.options].map((o) => o.value).join(",") === "auto,de,en", "patcher: language list (auto, Deutsch, English)");
+  sel.value = "en"; sel.dispatchEvent(new w.Event("change")); await sleep(20);
+  ok(d.getElementById("state-title").textContent === "Up to date" && d.querySelector("#p-news h4").textContent === "Hello", "patcher: switching to English re-renders state and news");
+  d.getElementById("dlg").dispatchEvent(new w.Event("close")); await sleep(20);
+  ok(w.savedLang === "en", "patcher: the language is saved");
+  w = await mk("patcher", mkp({ files_updated: [], patches_applied: [], repaired: [], removed: [] }, { language: "fr", locales: { fr: { _name: "Français", play: "Jouer", "state.ok": "À jour" } } }));
+  await sleep(150); d = w.document;
+  ok(d.querySelector("#btn-play span").textContent === "Jouer" && d.getElementById("state-title").textContent === "À jour" && d.getElementById("btn-check").textContent.includes("Check files"), "patcher: a language from the server's theme folder, English for missing keys");
   ok(w.errors.length === 0, "patcher: no script errors " + w.errors.join(";"));
   process.exit();
 })();

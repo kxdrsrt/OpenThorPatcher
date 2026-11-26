@@ -11,7 +11,8 @@
 | M5 | MCP server `otp-mcp` | done (smoke tested over stdio) |
 | M6 | OdinGuard integration: `og grf-scan` hook in the Maker (`odinguard` in the project, before the patch list is written), signed `grf-manifest.json` in the site, check of the GRFs against it after patching | done, `tests/e2e.sh` (stand-in `og` and, with `OG=…`, the real one) |
 | M7 | Self-update (signed) | **done (0.2.0)**: `patcher` in the list, `otp self-update`, loop guard; `tests/e2e.sh` and on Windows 11 in the VM (0.1.0 → 0.1.1 replaced itself once, restarted, patched; a wrong build stops with a warning) |
-| M7b | Installers, languages (themes are done in M4) | planned |
+| M7b | Installers | planned |
+| M12 | Languages: patcher window in English and German (Windows language or the player's choice), program messages translated, news/changelog per language (`lang`), pack titles (`titles`), more languages from the server's theme folder (`patcher-theme/locales/<code>.json`); Patch Maker: language per entry | **done (0.5.0)**: UI test (German, switching, filtering, a French file from the server), VM screenshot in German; the Patch Maker window itself stays English |
 | M8 | Parallel downloads, bandwidth limit | **done (0.2.0)**: `parallel` (default 4), `max_kbps`; `tests/e2e.sh` (12 files with 6 at a time; 768 KiB at 256 KiB/s took ≥ 2 s), VM: 8 files in parallel equal to the master |
 | M8b | MEGA file links | **done (0.2.0)**: API + AES-128-CTR + resume; e2e with a stand-in, and a real public MEGA file downloaded and resumed byte-identically; `otp fetch` to check any link |
 | M8c | Binary deltas for single huge non-GRF files, zip/7z/rar input | planned |

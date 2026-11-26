@@ -14,6 +14,25 @@ News text: blank line = paragraph, `- ` = list item, `**bold**`, `[text](https:/
 `website` (https) adds a **Website** button that opens the server's site in the player's browser, `links` ([{title,url}]: Discord, forum, vote …) appear at the bottom of the window, and links inside news text open in the browser too (only http/https, never inside the patcher). A `news_url` (https) adds a third tab that shows a website inside the patcher; without written news the website opens first.
 Newest first.
 
+## Languages
+
+The patcher window speaks **English and German** (since 0.5.0). It follows the Windows display language; the player can
+choose another one under *Settings → Language* (saved per computer). Messages of the patcher program (game already
+running, maintenance, missing files …) are translated too; its technical log stays English.
+
+**News and changelog per language:** give an entry `"lang": "de"` or `"lang": "en"` (Patch Maker: *Language* field and
+*Copy for another language*). The patcher shows the entries without a language plus those in the player's language; if
+none exist in it, the English ones, else the first language there is. A `lang` (or `locale`) field of news from a web panel (`news_from`) is taken over.
+**Pack titles:** `"titles": {"de": "Darkworld-Karten"}` next to `title` (Patch Maker: *Title (Deutsch)*).
+
+**Adding a language without a new patcher:** put `patcher-theme/locales/<code>.json` into the client (it is patched like
+the theme), with the keys of `apps/patcher/ui/locales/en.js`; missing keys stay English, `_name` is the name in the
+language list. The same file for `de` or `en` changes single texts.
+
+```json
+{ "_name": "Français", "play": "Jouer", "update": "Mettre à jour", "state.ok": "À jour" }
+```
+
 ## Themes
 
 The patcher's look is a folder, **`patcher-theme/` inside the client folder**:

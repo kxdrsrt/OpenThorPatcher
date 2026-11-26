@@ -41,7 +41,7 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "links": [{ "title": "Discord", "url": "https://discord.gg/x" }],
   "servers": [{ "name": "Login", "host": "play.burning.example", "port": 6900 }, { "name": "Char", "host": "play.burning.example", "port": 6121 }, { "name": "Map", "host": "play.burning.example", "port": 5121 }],
   "remove": ["old.dll", "oldfolder/*"],
-  "news": [{ "date": "2026-11-25", "title": "Welcome", "body": "The **test server** is open.\n\n- 75x base" }],
+  "news": [{ "date": "2026-11-25", "title": "Welcome", "body": "The **test server** is open.\n\n- 75x base", "lang": "en" }],
   "changelog": [{ "date": "2026-11-25", "version": "Patch 12", "title": "LGP colours", "items": ["Magnus tiles are red"] }],
   "client": { "exe": "alpha.exe", "args": "-1sak1", "setup_exe": "Setup.exe", "max_instances": 1 },
   "data_ini": {
@@ -67,7 +67,8 @@ inside GRFs are removed by Thor delete directives. `client` says what the Play a
 (0.4.0, 0 or missing = no limit) is how many copies of the game may run at the same time when started from the patcher (see
 §6). `data_ini`
 gives the GRF load order; `@pack:<id>` is replaced by the pack's file only when the player switched the pack on (or
-`locked`), and GRFs the player added stay after the managed ones. `servers` are TCP-checked by the player app every 30 s (green/red dot, 2.5 s timeout); `website` and `links` become the Website pill and the icon buttons (icon chosen by host name; only http/https are opened). `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)).
+`locked`), and GRFs the player added stay after the managed ones. `servers` are TCP-checked by the player app every 30 s (green/red dot, 2.5 s timeout); `website` and `links` become the Website pill and the icon buttons (icon chosen by host name; only http/https are opened). `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)); a `lang` on a news or
+changelog entry and `titles` on a pack (0.5.0) are explained there under *Languages*.
 Unknown fields are ignored, so lists can grow without a new schema number.
 
 `files[].mirrors` (0.3.0) are more full links to the same file, tried in order (external files such as `data.grf`,
