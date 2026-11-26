@@ -366,7 +366,7 @@ echo "fake patcher" > "$D/openthor-patcher.exe"; echo '{"name":"PkgRO","patch_ur
 "$OTP" package --project "$D/project.json" --out "$D/pkg/PkgRO.zip" --patcher "$D/openthor-patcher.exe" --patcher-json "$D/patcher.json" > "$D/pkg.log" || { cat "$D/pkg.log"; fail "package"; }
 grep -q "left out (the patcher downloads them): data.grf" "$D/pkg.log" || { cat "$D/pkg.log"; fail "package: data.grf not left out"; }
 P="$D/player"; mkdir -p "$P"; (cd "$P" && unzip -q "$D/pkg/PkgRO.zip") || fail "package unzip"
-[ -f "$P/openthor-patcher.exe" ] && [ -f "$P/patcher.json" ] && [ -f "$P/cdata.grf" ] && [ -f "$P/BGM/01.mp3" ] && [ ! -e "$P/data.grf" ] || fail "package content"
+[ -f "$P/openthor.exe" ] && [ ! -e "$P/openthor-patcher.exe" ] && [ -f "$P/patcher.json" ] && [ -f "$P/cdata.grf" ] && [ -f "$P/BGM/01.mp3" ] && [ ! -e "$P/data.grf" ] || fail "package content"
 [ -f "$P/skin/dark theme/img/btn.bmp" ] || fail "package: folder sync entry (skin/dark theme/*) not packed"
 [ ! -e "$P/_backup_old" ] && [ ! -e "$P/notes.txt" ] || fail "package: unmanaged files packed"
 grep -q "notes.txt" "$D/pkg.log" || { cat "$D/pkg.log"; fail "package: no warning about unmanaged files"; }
@@ -387,6 +387,51 @@ echo "v1" > "$M/odin.cfg"
 "$OTP" package --project "$D/project.json" --out "$D/pkg/full.zip" --include-external > /dev/null || fail "package with external"
 unzip -l "$D/pkg/full.zip" | grep -q " data.grf$" || fail "package --include-external without data.grf"
 ok "package: refused when the master changed since the publish; --include-external packs data.grf too"
+
+# ---- upload (rclone to two places, gh release for the package), patch list last --------------------------------------
+if command -v rclone >/dev/null 2>&1; then
+D="$W/upload"; M="$D/m"; S="$D/site"; mkdir -p "$M" "$D/fakebin"
+echo a > "$M/a.cfg"; head -c 200000 /dev/urandom > "$M/big.bin"
+cat > "$D/fakebin/gh" <<'EOF'
+#!/bin/sh
+echo "$*" >> "$(dirname "$0")/gh.log"
+case "$1 $2" in "release view") exit 1;; esac
+exit 0
+EOF
+chmod +x "$D/fakebin/gh"
+cat > "$D/project.json" <<EOF
+{"server":"UpRO","client":"$M","site":"$S","base_urls":["file://$D/dest1"],"sync":["a.cfg"],
+ "external":{"big.bin":["file://$D/ext/big.bin"]},
+ "upload":{"site":["$D/dest1","$D/dest2/patch"],"package":["$D/pkgdest","gh-release:me/client@v1"],"external":["$D/ext"],"gh":"$D/fakebin/gh"}}
+EOF
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "upload publish"
+"$OTP" upload --project "$D/project.json" --site --external > "$D/up.log" 2>&1 || { cat "$D/up.log"; fail "upload site"; }
+for d in "$D/dest1" "$D/dest2/patch"; do
+  cmp "$S/patchlist.json" "$d/patchlist.json" && cmp "$S/files/a.cfg" "$d/files/a.cfg" || fail "upload: $d incomplete"
+  [ ! -e "$d/state" ] || fail "upload: state/ was uploaded"
+done
+cmp "$M/big.bin" "$D/ext/big.bin" || fail "upload: external file missing"
+grep -n "patch list last" "$D/up.log" | head -1 | grep -q . || fail "upload: patch list not uploaded last"
+P="$D/p"; mkdir -p "$P"
+"$OTP" patch --url "file://$D/dest2/patch" --client "$P" > /dev/null 2>&1 || fail "patch from the uploaded site"
+cmp "$M/big.bin" "$P/big.bin" && cmp "$M/a.cfg" "$P/a.cfg" || fail "uploaded site does not give the master version"
+echo z > "$D/x.zip"
+"$OTP" upload --project "$D/project.json" --package "$D/x.zip" > "$D/up2.log" 2>&1 || { cat "$D/up2.log"; fail "upload package"; }
+cmp "$D/x.zip" "$D/pkgdest/x.zip" || fail "upload: package not copied"
+grep -q "release create v1 --repo me/client" "$D/fakebin/gh.log" && grep -q "release upload v1 --repo me/client --clobber" "$D/fakebin/gh.log" || { cat "$D/fakebin/gh.log"; fail "upload: gh release not used"; }
+grep -q "https://github.com/me/client/releases/download/v1/x.zip" "$D/up2.log" || fail "upload: release link not reported"
+ok "upload: site to two places (patch list last, state/ kept local, patchable), external file, package to a folder and a GitHub release"
+MCP="$(dirname "$OTP")/otp-mcp"
+if [ -x "$MCP" ]; then
+  rm -rf "$D/ext"
+  call() { printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"otp_upload\",\"arguments\":$1}}" | "$MCP"; }
+  call "{\"project\":\"$D/project.json\",\"external\":true}" | grep -q "confirm: true" || fail "mcp otp_upload without confirm"
+  [ ! -e "$D/ext/big.bin" ] || fail "mcp otp_upload wrote without confirm"
+  call "{\"project\":\"$D/project.json\",\"external\":true,\"confirm\":true}" > "$D/mcp.log"
+  cmp "$M/big.bin" "$D/ext/big.bin" && grep -q '\\"what\\"' "$D/mcp.log" || { cat "$D/mcp.log"; fail "mcp otp_upload"; }
+  ok "mcp: otp_upload needs confirm, then uploads the external file"
+fi
+else echo "skip: rclone not installed (upload)"; fi
 
 # OdinGuard hook: after a publish the master GRFs go into the OdinGuard profile and grf-manifest.json into the site.
 # A stand-in `og` records its arguments (OG=/path/to/og runs the real program against a throw-away profile instead).

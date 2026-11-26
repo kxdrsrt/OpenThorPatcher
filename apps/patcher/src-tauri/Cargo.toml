@@ -11,7 +11,8 @@ name = "openthor_patcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "openthor-patcher"
+# players see this program in their client folder
+name = "openthor"
 path = "src/main.rs"
 
 [build-dependencies]

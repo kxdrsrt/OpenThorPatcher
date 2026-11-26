@@ -138,6 +138,14 @@ pub struct ClientCfg {
     /// Setup program (resolution, sound), relative to the client folder.
     #[serde(default)]
     pub setup_exe: String,
+    /// How many copies of the game the Play button may run at the same time (0 = no limit). A second click within a few
+    /// seconds never starts a second copy.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub max_instances: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// The patcher owns the `[Data]` list of `DATA.INI`. `order` may contain `@pack:<id>`, replaced by the pack's GRF

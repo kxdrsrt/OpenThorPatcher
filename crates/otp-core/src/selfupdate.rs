@@ -106,7 +106,7 @@ mod tests {
     fn install_swaps_and_keeps_the_old_file() {
         let d = std::env::temp_dir().join(format!("otp-selfupdate-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
-        let exe = d.join("openthor-patcher.exe");
+        let exe = d.join("openthor.exe");
         std::fs::write(&exe, b"old").unwrap();
         let new = sibling(&exe, ".new");
         std::fs::write(&new, b"new").unwrap();

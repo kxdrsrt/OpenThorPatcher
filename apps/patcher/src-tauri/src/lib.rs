@@ -66,6 +66,9 @@ struct Cfg {
     /// `false` switches the self-update off (default on; it only runs with a signed list).
     #[serde(default)]
     self_update: Option<bool>,
+    /// For classic servers without a patch list: how many copies of the game may run (0 = no limit).
+    #[serde(default)]
+    max_instances: Option<u32>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default)]
@@ -269,6 +272,7 @@ async fn check(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
             exe: cfg.game_exe.clone().unwrap_or_default(),
             args: cfg.game_args.clone().unwrap_or_default(),
             setup_exe: cfg.setup_exe.clone().unwrap_or_default(),
+            max_instances: cfg.max_instances.unwrap_or(0),
         });
         let out = Checked {
             server: l.as_ref().map(|l| l.server.clone()).unwrap_or_else(|| cfg.name.clone()),
@@ -415,13 +419,13 @@ fn game(st: &App, _setup: bool) -> Res<(ClientCfg, bool)> {
     }
     let c = load_cfg()?;
     let exe = c.game_exe.ok_or("the server did not say which program to start")?;
-    Ok((ClientCfg { exe, args: c.game_args.unwrap_or_default(), setup_exe: c.setup_exe.unwrap_or_default() }, false))
+    Ok((ClientCfg { exe, args: c.game_args.unwrap_or_default(), setup_exe: c.setup_exe.unwrap_or_default(), max_instances: c.max_instances.unwrap_or(0) }, false))
 }
 
 #[tauri::command]
 fn play(app: tauri::AppHandle, st: State<'_, Arc<App>>) -> Res<()> {
     let (g, _) = game(&st, false)?;
-    launch::start(&client_dir(&app), &g.exe, &g.args).map_err(err)
+    launch::start_checked(&client_dir(&app), &g.exe, &g.args, g.max_instances).map_err(err)
 }
 
 #[tauri::command]

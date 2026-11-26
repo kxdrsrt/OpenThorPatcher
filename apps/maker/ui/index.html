@@ -106,7 +106,7 @@
         <div class="card form">
           <p class="note wide" style="margin:0">Optional. Players' patchers replace themselves with these builds before they patch (only with a signed list). Raise the version with every new build.</p>
           <label class="fld"><span>Version</span><input id="u-ver" placeholder="0.2.0"></label>
-          <label class="fld wide"><span>Windows program (openthor-patcher.exe)</span><span class="inline"><input id="u-win" placeholder="empty = no update for Windows"><button class="btn icon pick" data-for="u-win" title="Choose file" aria-label="Choose the Windows patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+          <label class="fld wide"><span>Windows program (openthor.exe)</span><span class="inline"><input id="u-win" placeholder="empty = no update for Windows"><button class="btn icon pick" data-for="u-win" title="Choose file" aria-label="Choose the Windows patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
           <label class="fld wide"><span>macOS program (Apple silicon)</span><span class="inline"><input id="u-mac" placeholder="empty = no update for macOS"><button class="btn icon pick" data-for="u-mac" title="Choose file" aria-label="Choose the macOS patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
         </div>
       </section>
@@ -131,6 +131,7 @@
           <label class="fld"><span>Game program</span><input id="g-exe" placeholder="ragexe.exe"></label>
           <label class="fld"><span>Arguments</span><input id="g-args" placeholder="-1rag1"></label>
           <label class="fld"><span>Setup program</span><input id="g-setup" placeholder="Setup.exe"></label>
+          <label class="fld"><span>Game windows at once (0 = no limit)</span><input id="g-max" type="number" min="0" max="16" step="1" inputmode="numeric" placeholder="0"></label>
         </div>
         <h3>News</h3>
         <div class="card form">
@@ -193,6 +194,15 @@
         <div class="warnbox" id="cloud-warn"><b>Cloud drives are the fragile option.</b> Large files can hit download quotas or return a web page instead of the file; the patcher then stops with a clear message. Use them for small communities, and prefer a static host for anything big. Links are converted to direct downloads automatically.</div>
         <div class="row"><button id="btn-refresh-files" class="btn"><svg class="ic"><use href="#i-scan"/></svg>Refresh file list</button><span class="muted" id="links-summary"></span></div>
         <div class="table-wrap"><table id="links"></table></div>
+        <h3>Upload</h3>
+        <div class="card form">
+          <p class="note wide" style="margin:0">One target per line. <b>rclone</b> destinations (<code>remote:path</code>, set up once with <code>rclone config</code>: SFTP to your own server, S3 / R2, MEGA, Google Drive, Dropbox, OneDrive) or a local folder; for packages and external files also <code>gh-release:owner/repo@tag</code> (needs the <code>gh</code> program). The site is uploaded file by file and the patch list last, so players never see a half-uploaded site; <code>state/</code> stays on this computer.</p>
+          <label class="fld wide"><span>Patch site</span><textarea id="up-site" rows="2" placeholder="myserver:/var/www/patch&#10;r2:burningro-patch"></textarea></label>
+          <label class="fld wide"><span>Client package</span><textarea id="up-pkg" rows="2" placeholder="mega:BurningRO&#10;gh-release:me/burningro-client@client"></textarea></label>
+          <label class="fld wide"><span>External files (data.grf)</span><textarea id="up-ext" rows="2" placeholder="mega:BurningRO"></textarea></label>
+          <div class="row"><button id="btn-up-site" class="btn primary"><svg class="ic"><use href="#i-publish"/></svg>Upload site</button><button id="btn-up-ext" class="btn"><svg class="ic"><use href="#i-publish"/></svg>Upload external files</button></div>
+          <pre id="up-log" class="out" hidden></pre>
+        </div>
         <h3>Git hosting</h3>
         <div class="card form">
           <label class="switch-row"><span>Commit and push the site after publishing<small>the site folder must be a git working tree (your own git login pushes, so a private repository needs no token here); use <code>gh:owner/repo@main</code> or <code>gl:group/project@main</code> as the mirror</small></span><span class="switch"><input type="checkbox" id="f-git"><i></i></span></label>
@@ -222,8 +232,9 @@
         <h3>Client package for new players</h3>
         <div class="card form">
           <p class="note wide" style="margin:0">A ZIP of the master client exactly as published, with the patcher and <code>patcher.json</code>. External files (<code>data.grf</code>) stay out: the patcher downloads them on the first start. Upload the ZIP to MEGA, a GitHub release or your website. Publish first: a master that changed since the last publish is refused.</p>
-          <label class="fld wide"><span>Patcher program (openthor-patcher.exe)</span><span class="inline"><input id="k-exe" placeholder="the Windows patcher"><button class="btn icon pick" data-for="k-exe" title="Choose file" aria-label="Choose the patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+          <label class="fld wide"><span>Patcher program (openthor.exe; it is always named so in the package)</span><span class="inline"><input id="k-exe" placeholder="the Windows patcher"><button class="btn icon pick" data-for="k-exe" title="Choose file" aria-label="Choose the patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
           <label class="switch-row"><span>Also pack the external files<small>one big download instead of the patcher fetching them</small></span><span class="switch"><input type="checkbox" id="k-ext"><i></i></span></label>
+          <label class="switch-row"><span>Upload it afterwards<small>to the package targets of the Hosting page; the links are shown in the log</small></span><span class="switch"><input type="checkbox" id="k-up"><i></i></span></label>
           <div class="row"><button id="btn-package" class="btn"><svg class="ic"><use href="#i-save"/></svg>Make package…</button></div>
         </div>
         <h3>Log</h3>

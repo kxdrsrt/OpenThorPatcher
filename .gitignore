@@ -3,3 +3,5 @@ target/
 .DS_Store
 config/secrets/
 *.seed
+tests/ui/node_modules/
+tests/ui/package-lock.json

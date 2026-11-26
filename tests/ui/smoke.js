@@ -57,6 +57,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   d.querySelector("nav button[data-tab=players]").click(); await sleep(30);
   d.getElementById("btn-server-std").click();
   ok(d.querySelectorAll("#servers-list .item").length === 3, "maker: login/char/map servers");
+  const gm = d.getElementById("g-max"); gm.value = "1"; gm.dispatchEvent(new w.Event("input"));
   d.querySelector("nav button[data-tab=news]").click(); await sleep(30);
   d.getElementById("btn-link-add").click();
   ok(d.querySelectorAll("#links-list .item").length === 1, "maker: link added");
@@ -71,6 +72,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   d.getElementById("btn-plan").click(); await sleep(150);
   ok(!d.getElementById("plan-wrap").hidden && d.querySelectorAll("#plan tbody tr").length === 2, "maker: plan table");
   ok(saved.length >= 1 && saved[saved.length - 1].url_map["files/odin.grf"], "maker: saved before plan with link");
+  ok(saved[saved.length - 1].game && saved[saved.length - 1].game.max_instances === 1, "maker: game windows limit saved as a number");
   ok(w.errors.length === 0, "maker: no script errors " + w.errors.join(";"));
   // ---- patcher
   const mkp = (summary, extra = {}) => (w) => ({
@@ -81,6 +83,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
       case "open_url": w.opened = (w.opened || []).concat(a.url); return null;
       case "check": return Object.assign({ server: "TestRO", notice: "Welcome!", news: [{ date: "2026-11-25", title: "Hello <b>", body: "Para one\n\n- item **bold**\n- [link](https://x.y/z)" }], changelog: [{ date: "2026-11-25", version: "Patch 3", title: "T", items: ["one", "two"] }], website: "https://burning.example", links: [{ title: "Discord", url: "https://discord.gg/x" }, { title: "bad", url: "javascript:alert(1)" }], news_url: "", open: true, message: "", packs: [{ id: "comp", title: "Competitive", on: true, locked: false }], can_play: true, can_setup: true, summary }, extra);
       case "patch": return summary;
+      case "play": w.plays = (w.plays || 0) + 1; if (w.playErr) throw w.playErr; return null;
       default: return null; } } },
     dialog: { open: async () => "/c2" }, event: { listen: async () => () => {} },
   });
@@ -106,6 +109,12 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   await sleep(150); d = w.document;
   ok(d.getElementById("state-title").textContent === "Up to date" && d.getElementById("btn-update").hidden && !d.getElementById("btn-play").disabled, "patcher: up to date, Play enabled");
   ok(!d.getElementById("btn-setup").hidden, "patcher: setup button");
+  d.getElementById("btn-play").click(); await sleep(30); d.getElementById("btn-play").click(); await sleep(30);
+  ok(w.plays === 1 && d.getElementById("btn-play").disabled, "patcher: Play is locked after a start (second click ignored)");
+  w = await mk("patcher", mkp({ files_updated: [], patches_applied: [], repaired: [], removed: [] }));
+  await sleep(150); d = w.document; w.playErr = "The game is already running. Only one game window is allowed.";
+  d.getElementById("btn-play").click(); await sleep(30);
+  ok(d.getElementById("toast").classList.contains("warn") && d.getElementById("toast").textContent.includes("already running"), "patcher: refused start shown as a warning");
   w = await mk("patcher", mkp({ files_updated: [], patches_applied: [], repaired: [], removed: [] }, { open: false, message: "Maintenance" }));
   await sleep(150); d = w.document;
   ok(d.getElementById("state-title").textContent === "Patching is closed", "patcher: maintenance");

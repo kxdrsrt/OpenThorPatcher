@@ -410,7 +410,7 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
             if !src.is_file() {
                 return Err(msg(format!("patcher program for {platform} not found: {}", src.display())));
             }
-            let name = src.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "openthor-patcher".into());
+            let name = src.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "openthor".into());
             let rel = format!("{platform}/{name}");
             let sha = sha256_file(src)?;
             let size = std::fs::metadata(src).map_err(|e| io_err(src, e))?.len();

@@ -114,14 +114,8 @@ On the command line: `otp patch --url <primary> --fallback-url <second> --fallba
 
 **Publishing to several places without ever showing a half-uploaded site:** publish once, then upload `files/` and `patches/`
 to every source **first** and `patchlist.json` + `patchlist.json.sig` **last**. A client that sees the new list can then
-always find the files it names. With rclone, for example:
-
-```sh
-for dest in r2:myro-patch myserver:/var/www/patch; do
-  rclone copy site/files   "$dest/files";   rclone copy site/patches "$dest/patches"
-  rclone copy site/patchlist.json "$dest";  rclone copy site/patchlist.json.sig "$dest"
-done
-```
+always find the files it names. `otp upload` (and the Patch Maker's *Upload* card) does exactly that, see
+[Uploading](#uploading-otp-upload).
 
 A token for a private host (`headers`) is only sent to `patch_url`'s host unless you list others in `header_hosts`, so a
 GitHub token never goes to the second source.
@@ -132,6 +126,43 @@ GitHub token never goes to the second source.
 *Tested:* the end-to-end script covers a stale first source with a current fallback, a client refusing an older list than the
 one it applied, a missing primary, and a damaged file on one source (`tests/e2e.sh`). The 45-second stall limit and the proxy
 setting are in the code and have **not** been tested against a real stalled server or a real proxy.
+
+## Uploading (`otp upload`)
+
+Since 0.4.0 the Patch Maker (Hosting → *Upload*) and `otp upload` copy everything to its places, so nothing has to be
+dragged into a web interface by hand. Targets are written into the project:
+
+```json
+"upload": {
+  "site":     ["myserver:/var/www/patch", "r2:myro-patch"],
+  "package":  ["gh-release:me/myro-client@client-2026-11", "mega:MyRO"],
+  "external": ["mega:MyRO/base", "gh-release:me/myro-client@base"]
+}
+```
+
+| Target | Means |
+|---|---|
+| `remote:path` | an [rclone](https://rclone.org) remote you set up once with `rclone config`: SFTP to your own server, Cloudflare R2/S3, MEGA, Google Drive, Dropbox, OneDrive, FTP … A plain folder path works too |
+| `gh-release:owner/repo@tag` | a GitHub release (created if it is missing), uploaded with the `gh` program; files are replaced (`--clobber`) |
+
+```sh
+otp upload --project otp-project.json --site                  # patch site: files and patches first, the list last
+otp upload --project otp-project.json --package MyRO.zip      # the client package from `otp package`
+otp upload --project otp-project.json --external              # data.grf and other external files
+```
+
+* The site upload leaves out `state/` (it stays on your PC) and copies `patchlist.json` + `.sig` only after everything else
+  succeeded on that target.
+* For package and external uploads the public link is printed when the host has one (`rclone link`, the release asset
+  URL). Put the external links into the project's `external` map and publish again.
+* rclone and gh keep their own logins (`rclone config`, `gh auth login`); OpenThor never sees or stores a password. Paths
+  to the programs can be set with `upload.rclone` / `upload.gh`.
+* GitHub releases take files up to 2 GB; a `data.grf` of 2.4 GB does not fit, MEGA or your own server does.
+* The MCP server has the same as `otp_upload` and `otp_package`.
+
+*Tested:* `tests/e2e.sh` uploads to two local rclone targets (list last, `state/` left out, a client patches from the
+uploaded copy), an external file, and a package to a folder and to a GitHub release (with a stand-in `gh`). Real SFTP, R2,
+MEGA and GitHub uploads have **not** been run yet.
 
 ## Cloud drives
 

@@ -4,7 +4,7 @@
 
 | Part | Runs on | Docker? |
 |---|---|---|
-| **OpenThor Patcher** (`openthor-patcher.exe`) | every player's Windows PC | no, it is a desktop program |
+| **OpenThor Patcher** (`openthor.exe` in the client folder) | every player's Windows PC | no, it is a desktop program |
 | **Patch Maker** (`openthor-maker.exe`) / `otp publish` | the operator's PC (or the server that holds the master client) | optional: `otp` has a container image |
 | **The patch site** (a folder of files) | any web server | optional: an nginx image is provided |
 
@@ -16,7 +16,7 @@ convenient** if you already run your game server with Docker/Easypanel: a tiny n
 1. On your PC: Patch Maker → *New project* (master client folder, output folder) → create the key pair → set the mirror
    (`https://patch.example.com/`) → *Publish*.
 2. Upload the output folder to a host that serves it over HTTPS (any static host works, see [HOSTING.md](HOSTING.md)).
-3. Put `patcher.json` (Patch Maker → Hosting → *Save patcher.json*) next to `openthor-patcher.exe` and hand both to the
+3. Put `patcher.json` (Patch Maker → Hosting → *Save patcher.json*) next to `openthor.exe` and hand both to the
    testers together with the baseline client (the first publish's GRF versions).
 4. For every update: change the master client, *Preview*, *Publish*, upload the changed files. Players update at the
    next start.

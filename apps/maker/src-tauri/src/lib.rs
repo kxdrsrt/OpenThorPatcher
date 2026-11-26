@@ -131,6 +131,27 @@ fn site_status(project: Project) -> SiteStatus {
     }
 }
 
+/// Upload the site, a package and/or the external files to the project's targets (rclone, gh).
+#[tauri::command]
+async fn upload(project: Project, site: bool, external: bool, package: Option<String>) -> Res<Vec<otp_core::upload::Uploaded>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut all = Vec::new();
+        let mut log = |_: &str| {};
+        if external {
+            all.extend(otp_core::upload::upload_external(&project, &mut log).map_err(err)?);
+        }
+        if site {
+            all.extend(otp_core::upload::upload_site(&project, &mut log).map_err(err)?);
+        }
+        if let Some(z) = package {
+            all.extend(otp_core::upload::upload_file(&project, std::path::Path::new(&z), &project.upload.package, "package", &mut log).map_err(err)?);
+        }
+        Ok(all)
+    })
+    .await
+    .map_err(err)?
+}
+
 /// The client package for new players (`otp package`): ZIP of the published master client, patcher and patcher.json.
 #[tauri::command]
 async fn make_package(project: Project, out: String, patcher: Option<String>, patcher_json: Option<String>, include_external: bool) -> Res<otp_core::package::Report> {
@@ -230,6 +251,7 @@ pub fn run() {
             site_status,
             patcher_config,
             make_package,
+            upload,
             write_text,
             export_theme,
             reveal,

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 pub struct Options {
     /// The ZIP to write.
     pub out: PathBuf,
-    /// The patcher program to put next to the game (`openthor-patcher.exe`).
+    /// The patcher program to put next to the game; it is always named `openthor.exe` in the package.
     pub patcher: Option<PathBuf>,
     /// Content of `patcher.json` for the players.
     pub patcher_json: Option<String>,
@@ -132,7 +132,7 @@ pub fn package(p: &Project, o: &Options, log: &mut dyn FnMut(&str)) -> Result<Re
     let unmanaged: Vec<String> = all
         .iter()
         .map(|(r, _)| r.clone())
-        .filter(|r| !lower.contains(&r.to_ascii_lowercase()) && !r.eq_ignore_ascii_case("patcher.json") && !r.to_ascii_lowercase().starts_with("openthor-patcher"))
+        .filter(|r| !lower.contains(&r.to_ascii_lowercase()) && !r.eq_ignore_ascii_case("patcher.json") && !r.to_ascii_lowercase().starts_with("openthor"))
         .collect();
     if !unmanaged.is_empty() {
         let show: Vec<&str> = unmanaged.iter().take(5).map(|s| s.as_str()).collect();
@@ -144,8 +144,9 @@ pub fn package(p: &Project, o: &Options, log: &mut dyn FnMut(&str)) -> Result<Re
         ));
     }
     let files: Vec<(String, PathBuf)> = managed.iter().map(|m| (m.clone(), p.client.join(m))).collect();
-    let patcher_name = o.patcher.as_ref().and_then(|x| x.file_name()).map(|n| n.to_string_lossy().to_string());
-    if o.patcher.is_none() && !files.iter().any(|(r, _)| r.to_ascii_lowercase().starts_with("openthor-patcher")) {
+    // the patcher is always `openthor.exe` in the client folder, whatever the file on the operator's disk is called
+    let patcher_name = o.patcher.as_ref().map(|x| if x.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) { "openthor.exe".to_string() } else { "openthor".to_string() });
+    if o.patcher.is_none() && !all.iter().any(|(r, _)| r.to_ascii_lowercase().starts_with("openthor")) {
         warnings.push("the package has no patcher program (give --patcher)".into());
     }
     if o.patcher_json.is_none() && !files.iter().any(|(r, _)| r.eq_ignore_ascii_case("patcher.json")) {

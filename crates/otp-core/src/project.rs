@@ -84,9 +84,37 @@ pub struct Project {
     /// the first link that works. Publish never copies them. Change such a file rarely: every change is a full download.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub external: BTreeMap<String, Vec<String>>,
+    /// Where `otp upload` (and the Patch Maker's Upload buttons) put the site, the client package and external files.
+    #[serde(default, skip_serializing_if = "UploadCfg::is_empty")]
+    pub upload: UploadCfg,
     /// Patcher programs to offer as a self-update (written to `patcher/` of the site).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patcher: Option<PatcherCfg>,
+}
+
+/// Upload targets: rclone destinations (`remote:path`, a local folder) or `gh-release:owner/repo@tag`. See [`crate::upload`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct UploadCfg {
+    /// the patch site (every target is a full copy; the first is usually `patch_url`)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub site: Vec<String>,
+    /// the client package for new players
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub package: Vec<String>,
+    /// external files (`data.grf`)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub external: Vec<String>,
+    /// path of rclone / gh when they are not in PATH
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rclone: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gh: Option<PathBuf>,
+}
+
+impl UploadCfg {
+    pub fn is_empty(&self) -> bool {
+        self.site.is_empty() && self.package.is_empty() && self.external.is_empty() && self.rclone.is_none() && self.gh.is_none()
+    }
 }
 
 /// The patcher builds that players get through the self-update.
@@ -145,6 +173,7 @@ impl Project {
             status_url: String::new(),
             status_realm: String::new(),
             external: BTreeMap::new(),
+            upload: UploadCfg::default(),
             patcher: None,
         }
     }

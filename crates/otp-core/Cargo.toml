@@ -18,3 +18,4 @@ thiserror = "2"
 aes = "0.8"
 base64 = "0.22"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }

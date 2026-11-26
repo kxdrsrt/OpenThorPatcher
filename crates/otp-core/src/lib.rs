@@ -20,6 +20,7 @@ pub mod publish;
 pub mod selfupdate;
 pub mod sign;
 pub mod sync;
+pub mod upload;
 
 use std::io::Read;
 use std::path::Path;

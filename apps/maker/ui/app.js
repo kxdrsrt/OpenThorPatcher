@@ -167,6 +167,7 @@ function renderPlayers() {
   bind("#g-exe", () => project.game?.exe, (v) => (g().exe = v));
   bind("#g-args", () => project.game?.args, (v) => (g().args = v));
   bind("#g-setup", () => project.game?.setup_exe, (v) => (g().setup_exe = v));
+  bind("#g-max", () => project.game?.max_instances || "", (v) => (g().max_instances = Math.max(0, parseInt(v, 10) || 0)));
   bind("#n-url", () => project.news_url, (v) => (project.news_url = v));
   bind("#n-notice", () => project.notice, (v) => (project.notice = v));
   bind("#m-open", () => project.allow_patching, (v) => (project.allow_patching = v));
@@ -211,6 +212,11 @@ function today() { return new Date().toISOString().slice(0, 10); }
 function renderNewsPage() {
   bind("#n-url2", () => project.news_url, (v) => (project.news_url = v));
   bind("#w-url", () => project.website, (v) => (project.website = v));
+  const up = () => project.upload || (project.upload = {});
+  const lines = (v) => v.split(/\n/).map((x) => x.trim()).filter(Boolean);
+  bind("#up-site", () => (project.upload?.site || []).join("\n"), (v) => (up().site = lines(v)));
+  bind("#up-pkg", () => (project.upload?.package || []).join("\n"), (v) => (up().package = lines(v)));
+  bind("#up-ext", () => (project.upload?.external || []).join("\n"), (v) => (up().external = lines(v)));
   bind("#cp-news", () => project.news_from || "", (v) => (project.news_from = v.trim()));
   bind("#cp-status", () => project.status_url || "", (v) => (project.status_url = v.trim()));
   bind("#cp-realm", () => project.status_realm || "", (v) => (project.status_realm = v.trim()));
@@ -418,7 +424,25 @@ $("#btn-package").onclick = () => busy($("#btn-package"), "Packing…", async ()
     const r = await invoke("make_package", { project, out, patcher: $("#k-exe").value || null, patcherJson: cfg, includeExternal: $("#k-ext").checked });
     $("#log").textContent = [`${r.out}: ${r.files} files, ${human(r.size)}`, `SHA-256 ${r.sha256}`, ...(r.left_out.length ? [`left out (the patcher downloads them): ${r.left_out.join(", ")}`] : []), ...r.warnings.map((w) => "warning: " + w)].join("\n");
     status(r.warnings.length ? "Package written, with warnings (see the log)." : "Package written.", r.warnings.length ? "warn" : "ok");
+    if ($("#k-up").checked) {
+      const u = await invoke("upload", { project, site: false, external: false, package: r.out });
+      $("#log").textContent += "\n" + u.map((x) => `uploaded to ${x.target}${x.link ? ": " + x.link : ""}`).join("\n");
+      status("Package written and uploaded.");
+    }
   } catch (e) { status(String(e), false); $("#log").textContent = String(e); }
+});
+function upLog(rs) {
+  const o = $("#up-log");
+  o.hidden = false;
+  o.textContent = rs.map((u) => `${u.what} → ${u.target}${u.link ? "\n  " + u.link : ""}`).join("\n");
+}
+$("#btn-up-site").onclick = () => busy($("#btn-up-site"), "Uploading…", async () => {
+  try { upLog(await invoke("upload", { project, site: true, external: false, package: null })); status("Site uploaded."); }
+  catch (e) { status(String(e), false); }
+});
+$("#btn-up-ext").onclick = () => busy($("#btn-up-ext"), "Uploading…", async () => {
+  try { upLog(await invoke("upload", { project, site: false, external: true, package: null })); status("External files uploaded. Put the links into the file list (External link)."); }
+  catch (e) { status(String(e), false); }
 });
 $("#btn-publish").onclick = () => busy($("#btn-publish"), "Publishing…", () => doPublish(false).catch((e) => status(String(e), false)));
 $("#btn-reveal").onclick = () => project && invoke("reveal", { path: project.site }).catch((e) => status(String(e), false));

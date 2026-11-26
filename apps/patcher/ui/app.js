@@ -316,7 +316,19 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest && e.target.closest("a[href]");
   if (a && /^https?:\/\//.test(a.getAttribute("href"))) { e.preventDefault(); openUrl(a.getAttribute("href")); }
 });
-$("#btn-play").onclick = () => invoke("play").then(() => toast("Starting the game…")).catch((e) => toast(String(e), "bad"));
+/* Play: pending updates are installed first; a second click while the game starts does nothing. */
+$("#btn-play").onclick = async () => {
+  if (patching || $("#btn-play").disabled) return;
+  if (checked && checked.open && !upToDate(checked.summary)) {
+    await patch(false);
+    if (!checked || !upToDate(checked.summary)) { toast("The client is not up to date yet; the game was not started.", "warn"); return; }
+  }
+  const b = $("#btn-play");
+  b.disabled = true;
+  try { await invoke("play"); toast("Starting the game…"); }
+  catch (e) { const m = String(e); toast(m, m.startsWith("The game is") ? "warn" : "bad"); }
+  setTimeout(() => { b.disabled = false; buttons(); }, 8000);
+};
 $("#btn-setup").onclick = () => invoke("setup").catch((e) => toast(String(e), "bad"));
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 

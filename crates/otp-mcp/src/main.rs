@@ -1,7 +1,7 @@
 //! OpenThor Patcher MCP server (stdio, newline-delimited JSON-RPC 2.0, tools only).
 //!
 //! Lets an AI assistant set up a patch project, preview and publish the patch site, and check a client against a
-//! site. Tools that write (`otp_project_create`, `otp_project_update`, `otp_publish`, `otp_patch`, `otp_keygen`)
+//! site. Tools that write (`otp_project_create`, `otp_project_update`, `otp_publish`, `otp_package`, `otp_upload`, `otp_patch`, `otp_keygen`)
 //! need `confirm: true`; `OTP_MCP_READONLY=1` hides them completely. Secrets (signing key, GRF passwords) are never
 //! returned.
 
@@ -92,6 +92,33 @@ const TOOLS: &[Tool] = &[
         description: "Lists every file of the patch site with its size and the full link from the project's url_map (for cloud hosting where each file has its own share link).",
         writes: false,
         params: &[("project", "string", "Path of otp-project.json", true)],
+    },
+    Tool {
+        name: "otp_package",
+        title: "Make the client package",
+        description: "Writes the ZIP for new players: exactly the files the patch list manages (without external files such as data.grf unless include_external), plus the patcher as openthor.exe and patcher.json. Refused when the master client changed since the last publish.",
+        writes: true,
+        params: &[
+            ("project", "string", "Path of otp-project.json", true),
+            ("out", "string", "ZIP file to write", true),
+            ("patcher", "string", "Patcher program to include (named openthor.exe in the package)", false),
+            ("patcher_json", "string", "Content of patcher.json for the players", false),
+            ("include_external", "boolean", "Also pack the external files (one big download)", false),
+            ("confirm", "boolean", "Must be true", true),
+        ],
+    },
+    Tool {
+        name: "otp_upload",
+        title: "Upload site, package or external files",
+        description: "Uploads with the project's upload targets (rclone destinations such as sftp:, r2:, mega:, gdrive:, or gh-release:owner/repo@tag): the patch site (files first, patchlist.json and .sig last), a client package ZIP and/or the external files. Returns each target with its public link when the host gives one.",
+        writes: true,
+        params: &[
+            ("project", "string", "Path of otp-project.json", true),
+            ("site", "boolean", "Upload the patch site to upload.site", false),
+            ("package", "string", "Client package ZIP to upload to upload.package", false),
+            ("external", "boolean", "Upload the external files to upload.external", false),
+            ("confirm", "boolean", "Must be true", true),
+        ],
     },
     Tool {
         name: "otp_patch_check",
@@ -207,7 +234,7 @@ fn call(name: &str, a: &Value) -> Result<Value, String> {
             const ALLOWED: &[&str] = &[
                 "server", "base_urls", "thor", "sync", "remove", "signing_seed", "full", "news_url", "notice", "game", "data_ini", "url_map",
                 "allow_patching", "message", "news", "changelog", "website", "links", "servers", "git_push",
-                "news_from", "status_url", "status_realm", "patcher", "url_map", "external",
+                "news_from", "status_url", "status_realm", "patcher", "url_map", "external", "upload",
             ];
             for (k, val) in ch {
                 if !ALLOWED.contains(&k.as_str()) {
@@ -235,6 +262,45 @@ fn call(name: &str, a: &Value) -> Result<Value, String> {
         "otp_site_files" => {
             let p = Project::load(&PathBuf::from(need(a, "project")?)).map_err(e)?;
             Ok(json!({"files": site_files(&p)}))
+        }
+        "otp_package" => {
+            confirmed(a)?;
+            let p = Project::load(&PathBuf::from(need(a, "project")?)).map_err(e)?;
+            let o = otp_core::package::Options {
+                out: PathBuf::from(need(a, "out")?),
+                patcher: s(a, "patcher").map(PathBuf::from),
+                patcher_json: s(a, "patcher_json"),
+                include_external: a.get("include_external").and_then(Value::as_bool).unwrap_or(false),
+            };
+            let mut log = vec![];
+            let r = otp_core::package::package(&p, &o, &mut |l| log.push(l.to_string())).map_err(e)?;
+            let mut v = serde_json::to_value(r).map_err(e)?;
+            v["log"] = json!(log);
+            Ok(v)
+        }
+        "otp_upload" => {
+            confirmed(a)?;
+            let p = Project::load(&PathBuf::from(need(a, "project")?)).map_err(e)?;
+            let flag = |k: &str| a.get(k).and_then(Value::as_bool).unwrap_or(false);
+            let pkg = s(a, "package").filter(|x| !x.is_empty());
+            if !flag("site") && pkg.is_none() && !flag("external") {
+                return Err("give site: true, package: <zip> and/or external: true".into());
+            }
+            let mut log = vec![];
+            let mut out = Vec::new();
+            {
+                let mut lg = |l: &str| log.push(l.to_string());
+                if flag("external") {
+                    out.extend(otp_core::upload::upload_external(&p, &mut lg).map_err(e)?);
+                }
+                if flag("site") {
+                    out.extend(otp_core::upload::upload_site(&p, &mut lg).map_err(e)?);
+                }
+                if let Some(z) = pkg {
+                    out.extend(otp_core::upload::upload_file(&p, std::path::Path::new(&z), &p.upload.package, "package", &mut lg).map_err(e)?);
+                }
+            }
+            Ok(json!({"uploaded": out, "log": log}))
         }
         "otp_patch_check" | "otp_patch" => {
             let dry = name == "otp_patch_check";
@@ -294,7 +360,7 @@ fn handle(msg: &Value, readonly: bool) -> Option<Value> {
                     "protocolVersion": v,
                     "capabilities": {"tools": {"listChanged": false}},
                     "serverInfo": {"name": "otp-mcp", "title": "OpenThor Patcher", "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": "OpenThor Patcher builds and applies Ragnarok Online client patches. Typical flow: otp_scan_client, otp_keygen, otp_project_create, otp_project_update (mirrors, data_ini, removals), otp_publish_plan, otp_publish, then upload the folder from otp_site_files. Tools that write need confirm: true.",
+                    "instructions": "OpenThor Patcher builds and applies Ragnarok Online client patches. Typical flow: otp_scan_client, otp_keygen, otp_project_create, otp_project_update (mirrors, data_ini, removals), otp_publish_plan, otp_publish, then otp_upload (or upload the folder from otp_site_files by hand) and otp_package for new players. Tools that write need confirm: true.",
                 }),
             )
         }

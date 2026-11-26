@@ -37,7 +37,7 @@ jobs:
           V="${GITHUB_REF_NAME:-dev}"
           D="openthor-patcher-$V-${{ matrix.name }}"
           mkdir "$D"
-          for b in otp otp-mcp openthor-patcher openthor-maker; do
+          for b in otp otp-mcp openthor openthor-maker; do
             cp "target/release/$b${{ matrix.ext }}" "$D/"
           done
           cp README.md LICENSE-MIT LICENSE-APACHE "$D/"
@@ -72,7 +72,7 @@ jobs:
           PRE=""
           case "$TAG" in v0.*|*-*) PRE="--prerelease" ;; esac
           cat > notes.md <<'EOF'
-          Each zip holds `otp` (CLI), `otp-mcp` (MCP server), `openthor-patcher` (player window) and `openthor-maker` (Patch Maker).
+          Each zip holds `otp` (CLI), `otp-mcp` (MCP server), `openthor` (player window, goes into the client folder) and `openthor-maker` (Patch Maker).
 
           **Pre-release.** Core, CLI and MCP server are covered by tests. The two apps have been run in a Windows 11 VM only and not yet on real player machines.
           The Windows programs are **not code-signed**: SmartScreen shows "unknown publisher" (More info, Run anyway). Windows 10/11 with WebView2 is required.

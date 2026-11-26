@@ -98,13 +98,15 @@ swapped in; the old file is **replaced completely**, a `.bak` only stays with `-
 - **Several sources, one master version:** the patch list is read from every source you give, the newest valid one wins, a stale or dead mirror changes nothing, a client never rolls back, every file is checked by SHA-256 (see [docs/HOSTING.md](docs/HOSTING.md)).
 - **Hosting freedom:** static host, S3/R2, GitHub Releases, **GitHub / GitLab repositories** (`gh:owner/repo@main`, `gl:group/project@main`, private ones with a read-only token), Google Drive / Dropbox / OneDrive share links or **MEGA file links** (decrypted on the fly, resumable). See [docs/HOSTING.md](docs/HOSTING.md).
 - **Big base files stay outside:** `data.grf` (gigabytes) is only a hash and download links (MEGA, a release, your server) in the list; `otp package` makes the new-player ZIP without it, and the patcher fetches it on the first start. The master client stays on your computer.
+- **Upload from the Maker:** site, client package and external files go to your server (SFTP), R2/S3, MEGA, Google Drive, Dropbox, OneDrive (all through rclone) or a GitHub release; the patch list is always uploaded last.
+- **Play, once:** Play installs pending updates first, ignores repeated clicks and can limit how many game windows run (`max_instances`). Each start carries a launch ticket, so a guard such as OdinGuard can refuse a game started without the patcher (see [docs/FORMATS.md](docs/FORMATS.md#6-starting-the-game-launch-ticket-040)).
 - **Fast and polite:** up to 4 downloads at the same time (configurable) and an optional bandwidth limit for all of them together.
 - **Self-update:** the signed patch list can offer a newer patcher; it replaces itself before patching (SHA-256 checked, never loops on a wrong build).
 - **MidgardCP:** news written once in the web panel arrive in the signed patch list at every publish; the patcher shows the realm's players online.
 - **Player window:** Website button, link buttons with icons (Discord, forum, GitHub …), login/char/map server status dots, a big Play button and **RO Setup**.
 - **Themes, news and changelog:** the player window is a themeable folder (default: a Ragnarok-style night-blue theme with the logo sticking out of the window); news and changelog are written in the Patch Maker and travel in the signed patch list.
 - **Optional packs** (for example OdinGuard's competitive pack) with a per-player switch that survives patching.
-- **Scriptable and AI-ready:** CLI with `--json`, and the `otp-mcp` MCP server (11 tools: create the project, preview, publish, write news, set servers and links) so an assistant can run your patch site; see [docs/MCP.md](docs/MCP.md).
+- **Scriptable and AI-ready:** CLI with `--json`, and the `otp-mcp` MCP server (13 tools: create the project, preview, publish, package, upload, write news, set servers and links) so an assistant can run your patch site; see [docs/MCP.md](docs/MCP.md).
 
 ## Download
 
@@ -118,10 +120,11 @@ otp keygen --out keys                      # signing.seed (secret) + patcher.pub
 otp init --project otp-project.json --server MyRO --client /path/to/master-client \
          --site /path/to/site --base-url https://patch.example.com/ --seed keys/signing.seed
 otp publish --project otp-project.json --dry-run    # what would change
-otp publish --project otp-project.json              # write the site, upload it
+otp publish --project otp-project.json              # write the site
+otp upload  --project otp-project.json --site       # upload it (targets in the project, see docs/HOSTING.md)
 ```
 
-Players get `patcher.json` next to the patcher (the Patch Maker writes it):
+Players get `patcher.json` next to the patcher, `openthor.exe` in the client folder (the Patch Maker writes it):
 
 ```json
 { "name": "MyRO", "patch_url": "https://patch.example.com/", "pub_key": "<contents of patcher.pub>" }

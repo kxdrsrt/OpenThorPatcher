@@ -43,14 +43,14 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "remove": ["old.dll", "oldfolder/*"],
   "news": [{ "date": "2026-11-25", "title": "Welcome", "body": "The **test server** is open.\n\n- 75x base" }],
   "changelog": [{ "date": "2026-11-25", "version": "Patch 12", "title": "LGP colours", "items": ["Magnus tiles are red"] }],
-  "client": { "exe": "alpha.exe", "args": "-1sak1", "setup_exe": "Setup.exe" },
+  "client": { "exe": "alpha.exe", "args": "-1sak1", "setup_exe": "Setup.exe", "max_instances": 1 },
   "data_ini": {
     "order": ["odin.grf", "@pack:competitive", "cdata.grf", "core.grf", "data.grf"],
     "packs": [{ "id": "competitive", "file": "odin-dark.grf", "title": "Competitive visuals", "default": true, "locked": false }]
   },
   "patcher": {
     "version": "0.2.0", "notes": "faster downloads",
-    "files": { "windows-x64": { "path": "windows-x64/openthor-patcher.exe", "size": 14050304, "sha256": "…", "url": "patcher/windows-x64/openthor-patcher.exe" } }
+    "files": { "windows-x64": { "path": "windows-x64/openthor.exe", "size": 14050304, "sha256": "…", "url": "patcher/windows-x64/openthor.exe" } }
   },
   "status_url": "https://cp.example/api/v1/status",
   "status_realm": "hr"
@@ -63,7 +63,9 @@ patched entry by entry: `baseline_sha256` is the version patch 0 starts from (wh
 order; ids are assigned by `otp publish`, nobody names or numbers them. A relative `url`/`file` is appended to the first
 mirror in `base_url` that has it; a full link (`https://…`, `gdrive:ID`, a share link) is used as it is, see
 [HOSTING.md](HOSTING.md). `remove` paths (relative, no `..`; `dir/*` = folder) are deleted from every client; entries
-inside GRFs are removed by Thor delete directives. `client` says what the Play and Setup buttons start. `data_ini`
+inside GRFs are removed by Thor delete directives. `client` says what the Play and Setup buttons start; `max_instances`
+(0.4.0, 0 or missing = no limit) is how many copies of the game may run at the same time when started from the patcher (see
+§6). `data_ini`
 gives the GRF load order; `@pack:<id>` is replaced by the pack's file only when the player switched the pack on (or
 `locked`), and GRFs the player added stay after the managed ones. `servers` are TCP-checked by the player app every 30 s (green/red dot, 2.5 s timeout); `website` and `links` become the Website pill and the icon buttons (icon chosen by host name; only http/https are opened). `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)).
 Unknown fields are ignored, so lists can grow without a new schema number.
@@ -117,3 +119,28 @@ keep_backup = true
 
 `patcher.state` (JSON, next to the executable): last applied id per target, hashes of the GRFs after the last
 successful patch, the player's pack choices. Deleting it forces a full check against the patch list.
+
+## 6. Starting the game: launch ticket (0.4.0)
+
+Play installs pending updates first, then starts `client.exe` with a **launch ticket**:
+
+1. The patcher writes `_patch/launch-<token>.ticket` in the client folder (`<token>` = 32 hex characters, content
+   `{"token":"<token>","time":<unix seconds>}`) and removes tickets older than 300 s.
+2. It starts the game with the environment variable `OPENTHOR_LAUNCH=<token>` (also through the UAC prompt when the game
+   needs administrator rights).
+3. A guard inside the game may require both: the variable is set, the file `_patch/launch-<token>.ticket` exists and is at
+   most 300 s old. It should delete the ticket and clear the variable so the token is used once. OdinGuard's `launcher`
+   module does exactly this and otherwise offers to start the patcher (`openthor.exe`) instead.
+
+The ticket is **not a security boundary**: anybody can write such a file and set the variable. It stops players from
+skipping updates by accident (an old desktop shortcut to `alpha.exe`), nothing more. OpenThor does not need a guard, and the
+guard does not need OpenThor: the two only share this protocol.
+
+**Several clicks.** The Play button is disabled for 8 s after a start, and the patcher refuses a second start of the same
+program within 8 s ("The game is starting, please wait."). With `max_instances` it counts the running copies of that exact
+program file and refuses more ("The game is already running. Only one game window is allowed."). Copies started some other
+way (a second client folder, a renamed exe) are not counted; a hard limit belongs to the server or the guard (OdinGuard:
+`og_max_windows`). *Tested:* unit test of the ticket and the 8 s guard; Windows 11 VM with BurningRO's client: a direct
+start of `alpha.exe` was refused by OdinGuard's launcher module, Play started the game, a second Play was refused with
+`max_instances: 1`.
+

@@ -138,6 +138,20 @@ enum Cmd {
         #[arg(long)]
         include_external: bool,
     },
+    /// Upload the patch site (files first, patch list last), a client package and/or the external files (rclone, gh)
+    Upload {
+        #[arg(long)]
+        project: PathBuf,
+        /// Upload the patch site to upload.site
+        #[arg(long)]
+        site: bool,
+        /// Upload this client package to upload.package
+        #[arg(long)]
+        package: Option<PathBuf>,
+        /// Upload the external files (data.grf …) to upload.external
+        #[arg(long)]
+        external: bool,
+    },
     /// Show the news a web panel (MidgardCP /api/v1/news) would put into the patch list
     News {
         #[arg(long)]
@@ -310,6 +324,26 @@ fn real() -> otp_core::Result<()> {
                 println!("left out (the patcher downloads them): {}", r.left_out.join(", "));
             }
             println!("{}: {} files, {} bytes, sha256 {}", r.out.display(), r.files, r.size, r.sha256);
+        }
+        Cmd::Upload { project, site, package, external } => {
+            let p = Project::load(&project)?;
+            if !site && package.is_none() && !external {
+                return Err(otp_core::msg("give --site, --package <zip> and/or --external"));
+            }
+            let mut log = |s: &str| println!("{s}");
+            let mut all = Vec::new();
+            if external {
+                all.extend(otp_core::upload::upload_external(&p, &mut log)?);
+            }
+            if site {
+                all.extend(otp_core::upload::upload_site(&p, &mut log)?);
+            }
+            if let Some(z) = package {
+                all.extend(otp_core::upload::upload_file(&p, &z, &p.upload.package, "package", &mut log)?);
+            }
+            for u in all {
+                println!("uploaded {} to {}{}", u.what, u.target, u.link.map(|l| format!(" ({l})")).unwrap_or_default());
+            }
         }
         Cmd::News { from } => {
             for n in otp_core::midgard::fetch_news(&from)? {
