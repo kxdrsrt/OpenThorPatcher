@@ -57,7 +57,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "otp_project_update",
         title: "Change a project",
-        description: "Merges the given fields into the project file. Allowed keys: server, base_urls, thor, sync, remove, signing_seed, full, news_url, notice, game {exe,args,setup_exe}, website, links [{title,url}], servers [{name,host,port}], git_push, news [{date,title,body}], changelog [{date,version,title,items[]}], data_ini {order,packs[{id,file,title,default,locked}]}, url_map {site path: full link}, allow_patching, message, news_from (web panel news URL, e.g. MidgardCP /api/v1/news?realm=hr), status_url + status_realm (MidgardCP /api/v1/status), patcher {version, files {windows-x64: path}, notes} (self-update).",
+        description: "Merges the given fields into the project file. Allowed keys: server, base_urls, thor, sync, remove, signing_seed, full, news_url, notice, game {exe,args,setup_exe}, website, links [{title,url}], servers [{name,host,port}], git_push, news [{date,title,body}], changelog [{date,version,title,items[]}], data_ini {order,packs[{id,file,title,default,locked}]}, url_map {site path: full link}, allow_patching, message, news_from (web panel news URL, e.g. MidgardCP /api/v1/news?realm=hr), status_url + status_realm (MidgardCP /api/v1/status), patcher {version, files {windows-x64: path}, notes} (self-update), external {data.grf: [links]} (big files kept out of the site).",
         writes: true,
         params: &[
             ("project", "string", "Path of otp-project.json", true),
@@ -207,7 +207,7 @@ fn call(name: &str, a: &Value) -> Result<Value, String> {
             const ALLOWED: &[&str] = &[
                 "server", "base_urls", "thor", "sync", "remove", "signing_seed", "full", "news_url", "notice", "game", "data_ini", "url_map",
                 "allow_patching", "message", "news", "changelog", "website", "links", "servers", "git_push",
-                "news_from", "status_url", "status_realm", "patcher", "url_map",
+                "news_from", "status_url", "status_realm", "patcher", "url_map", "external",
             ];
             for (k, val) in ch {
                 if !ALLOWED.contains(&k.as_str()) {

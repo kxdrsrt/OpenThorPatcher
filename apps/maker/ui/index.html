@@ -112,7 +112,7 @@
       </section>
 
       <section id="tab-files" class="tab needs-project">
-        <p class="lead">Decide how each file reaches players. <b>Patch entries</b> is for big GRFs: only the files inside that changed are sent. <b>Sync whole</b> sends the file again when its hash changes (good below ~50 MB). <b>Ignore</b> keeps it out.</p>
+        <p class="lead">Decide how each file reaches players. <b>Patch entries</b> is for big GRFs: only the files inside that changed are sent. <b>Sync whole</b> sends the file again when its hash changes (good below ~50 MB). <b>External link</b> is for huge base files such as <code>data.grf</code>: only its hash and your download links (MEGA, a release, your server) go into the list, the file itself is never uploaded with the site. <b>Ignore</b> keeps it out.</p>
         <div class="row"><button id="btn-scan" class="btn"><svg class="ic"><use href="#i-scan"/></svg>Rescan master client</button><span id="scan-summary" class="muted"></span></div>
         <div class="table-wrap"><table id="files"></table></div>
       </section>
@@ -219,6 +219,13 @@
         </div>
         <div id="busy" class="progress indeterminate" hidden><i></i></div>
         <div id="plan-wrap" hidden><h3>Changes</h3><div class="table-wrap"><table id="plan"></table></div></div>
+        <h3>Client package for new players</h3>
+        <div class="card form">
+          <p class="note wide" style="margin:0">A ZIP of the master client exactly as published, with the patcher and <code>patcher.json</code>. External files (<code>data.grf</code>) stay out: the patcher downloads them on the first start. Upload the ZIP to MEGA, a GitHub release or your website. Publish first: a master that changed since the last publish is refused.</p>
+          <label class="fld wide"><span>Patcher program (openthor-patcher.exe)</span><span class="inline"><input id="k-exe" placeholder="the Windows patcher"><button class="btn icon pick" data-for="k-exe" title="Choose file" aria-label="Choose the patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+          <label class="switch-row"><span>Also pack the external files<small>one big download instead of the patcher fetching them</small></span><span class="switch"><input type="checkbox" id="k-ext"><i></i></span></label>
+          <div class="row"><button id="btn-package" class="btn"><svg class="ic"><use href="#i-save"/></svg>Make package…</button></div>
+        </div>
         <h3>Log</h3>
         <pre id="log" class="out">Nothing yet.</pre>
       </section>

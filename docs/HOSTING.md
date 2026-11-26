@@ -48,6 +48,38 @@ Normal patches are small: `otp publish` writes a `.thor` diff with only what cha
 `data.grf` is a 166-byte patch), so a patch site needs little space and little traffic. Whole GRFs are only uploaded with
 `--full` (for repairing a damaged client) and can live on a bigger, slower place.
 
+## The master client stays on your computer
+
+The **master client** is the source of truth, but it is never uploaded as it is: `otp publish` turns it into the patch
+site (signed `patchlist.json` with the SHA-256 of every file, the files, the `.thor` diffs). The patch list *is* the
+published master: players are synced to the hashes in it, wherever the bytes come from. Keep a backup of the master folder
+and of `site/state/` (the entry hashes the next diff is computed from); without `state/` the next publish starts a new
+baseline.
+
+What goes where, for a typical client (measured with BurningRO's: 3.2 GB, 4262 files):
+
+| Part | How | Where |
+|---|---|---|
+| Custom GRFs (`cdata.grf` ~100 MB, `odin.grf`, `core.grf` …) | **packed, never unpacked**: big ones as Thor targets (only the changed entries travel), small ones synced whole | patch site |
+| BGM, skins, `System/`, DLLs, `alpha.exe` | synced whole by hash (folders as `skin/name/*`) | patch site |
+| `data.grf` (2.4 GB, 10 GB+ unpacked) | **external** (since 0.3.0): only size + SHA-256 + links in the list, never copied into the site | MEGA, a GitHub release (≤ 2 GB per file, so a release asset only after splitting, or another host), your server |
+| Client package for new players | `otp package`: ZIP of the published master **without** external files, with the patcher and `patcher.json` (BurningRO: 719 MB) | MEGA, GitHub release, your website |
+
+```json
+"external": { "data.grf": ["https://mega.nz/file/ID#KEY", "https://dl.example.com/data.grf"] }
+```
+
+A new player unpacks the package and starts the patcher; it sees that `data.grf` is missing, downloads it from the first
+link that works (checked by its SHA-256) and is done. `otp package` refuses to pack a master that changed since the last
+publish, so the package always matches the list; a player who installs an older package just gets the patches since then.
+Change an external file rarely: every change is a full download for every player. Content that changes belongs into a
+custom GRF (patched entry by entry).
+
+*Tested:* `tests/e2e.sh` (external file with a dead first link, package without it, fresh install needs no patch, refusal
+of an unpublished master, `skin/…/*` folder sync); on Windows 11 in the VM with BurningRO's real client: 719 MB package,
+patcher fetched the 2.4 GB `data.grf` from the second link (the first answered 404) in 26 s over the local network,
+SHA-256 equal to the master, the game started.
+
 ## Several sources (mirrors) and the master version
 
 You can list more than one place. **Every source must hold the same site** (the same publish). What the patcher does with

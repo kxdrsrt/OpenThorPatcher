@@ -15,6 +15,7 @@
 | M8 | Parallel downloads, bandwidth limit | **done (0.2.0)**: `parallel` (default 4), `max_kbps`; `tests/e2e.sh` (12 files with 6 at a time; 768 KiB at 256 KiB/s took ≥ 2 s), VM: 8 files in parallel equal to the master |
 | M8b | MEGA file links | **done (0.2.0)**: API + AES-128-CTR + resume; e2e with a stand-in, and a real public MEGA file downloaded and resumed byte-identically; `otp fetch` to check any link |
 | M8c | Binary deltas for single huge non-GRF files, zip/7z/rar input | planned |
+| M10 | External files and the client package: `external` (big files such as `data.grf` only as hash + links, several links per file), `otp package` (ZIP of the published master for new players, checked against the list), `current_sha256` (a fresh install needs no patches), folder sync entries (`skin/x/*`) | **done (0.3.0)**: e2e, and with BurningRO's real client in the VM (719 MB package, 2.4 GB `data.grf` fetched from the second link, game started) |
 | M9 | MidgardCP: `news_from` (news from `GET /api/v1/news`, HTML → patcher markup incl. headings, tables, relative links; the last news stay when the panel is down), `status_url` + `status_realm` (players online in the patcher), `otp news`, Maker fields, MCP. The signing key stays with the Patch Maker, never on the panel | **done (0.2.0)**: e2e, and against a running MidgardCP (dev): its two news articles and "51 online" shown in the patcher in the VM |
 | M9b | Launch tokens (password-less start after a web login) | later, needs a login-server change and its own security design |
 

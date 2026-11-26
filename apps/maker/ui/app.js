@@ -94,35 +94,45 @@ async function renderFiles() {
 
 function modeOf(path) {
   const n = norm(path);
+  if (Object.keys(project.external || {}).some((x) => norm(x) === n)) return "external";
   if (project.thor.some((x) => norm(x) === n)) return "thor";
   if (project.sync.some((x) => norm(x) === n)) return "sync";
   return "ignore";
 }
 
 function setMode(path, mode) {
+  const ext = project.external || (project.external = {});
+  const links = Object.entries(ext).find(([k]) => norm(k) === norm(path))?.[1];
   project.thor = without(project.thor, path);
   project.sync = without(project.sync, path);
+  for (const k of Object.keys(ext)) if (norm(k) === norm(path)) delete ext[k];
   if (mode === "thor") project.thor.push(path);
   if (mode === "sync") project.sync.push(path);
+  if (mode === "external") {
+    const v = prompt(`Download links for ${path} (one per line: MEGA, a release, your server). The file is not uploaded with the site; players without this version download it.`, (links || []).join("\n"));
+    const l = (v || "").split(/\s+/).map((x) => x.trim()).filter(Boolean);
+    if (l.length) ext[path] = l; else { status("No link given: the file stays ignored.", false); drawFiles(); }
+  }
+  if (!Object.keys(ext).length) delete project.external;
   touch();
   summaryFiles();
 }
 
 function summaryFiles() {
-  $("#scan-summary").textContent = `${project.thor.length} patched entry by entry · ${project.sync.length} synced whole`;
+  $("#scan-summary").textContent = `${project.thor.length} patched entry by entry · ${project.sync.length} synced whole · ${Object.keys(project.external || {}).length} external`;
 }
 
 function drawFiles() {
   const t = $("#files");
   const known = new Set(scanItems.map((i) => norm(i.path)));
-  const missing = [...project.thor, ...project.sync].filter((p) => !known.has(norm(p))).map((p) => ({ path: p, size: 0, missing: true }));
+  const missing = [...project.thor, ...project.sync, ...Object.keys(project.external || {})].filter((p) => !known.has(norm(p))).map((p) => ({ path: p, size: 0, missing: true }));
   const rows = scanItems.concat(missing);
   t.innerHTML = '<thead><tr><th>File</th><th class="num">Size</th><th>How players get it</th></tr></thead>';
   const body = el("tbody");
   rows.forEach((r, i) => {
     const mode = modeOf(r.path);
     const tr = el("tr", null, `<td><b>${esc(r.path)}</b>${r.missing ? '<span class="sub" style="color:var(--danger)">not in the master client any more</span>' : ""}</td><td class="num">${r.missing ? "–" : human(r.size)}</td>
-      <td><span class="seg" role="radiogroup" aria-label="Mode for ${esc(r.path)}">${[["thor", "Patch entries"], ["sync", "Sync whole"], ["ignore", "Ignore"]].map(([v, l]) => `<label><input type="radio" name="m${i}" value="${v}" ${mode === v ? "checked" : ""}><span>${l}</span></label>`).join("")}</span></td>`);
+      <td><span class="seg" role="radiogroup" aria-label="Mode for ${esc(r.path)}">${[["thor", "Patch entries"], ["sync", "Sync whole"], ["external", "External link"], ["ignore", "Ignore"]].map(([v, l]) => `<label><input type="radio" name="m${i}" value="${v}" ${mode === v ? "checked" : ""}><span>${l}</span></label>`).join("")}</span></td>`);
     tr.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => setMode(r.path, inp.value)));
     body.appendChild(tr);
   });
@@ -399,6 +409,17 @@ $("#btn-save").onclick = save;
 $("#btn-scan").onclick = () => busy($("#btn-scan"), "Scanning…", renderFiles);
 $("#btn-refresh-files").onclick = renderLinks;
 $("#btn-plan").onclick = () => busy($("#btn-plan"), "Comparing…", () => doPublish(true).catch((e) => status(String(e), false)));
+$("#btn-package").onclick = () => busy($("#btn-package"), "Packing…", async () => {
+  const out = await T.dialog.save({ defaultPath: `${(project.server || "client").replace(/[^A-Za-z0-9_-]+/g, "")}-client.zip`, filters: [{ name: "ZIP", extensions: ["zip"] }] });
+  if (!out) return;
+  let cfg = null;
+  try { cfg = await invoke("patcher_config", { project, pubHex: pubHex || "", listUrl: $("#list-url").value || null, headerName: $("#hdr-name").value || null, headerValue: $("#hdr-val").value || null }); } catch { cfg = null; }
+  try {
+    const r = await invoke("make_package", { project, out, patcher: $("#k-exe").value || null, patcherJson: cfg, includeExternal: $("#k-ext").checked });
+    $("#log").textContent = [`${r.out}: ${r.files} files, ${human(r.size)}`, `SHA-256 ${r.sha256}`, ...(r.left_out.length ? [`left out (the patcher downloads them): ${r.left_out.join(", ")}`] : []), ...r.warnings.map((w) => "warning: " + w)].join("\n");
+    status(r.warnings.length ? "Package written, with warnings (see the log)." : "Package written.", r.warnings.length ? "warn" : "ok");
+  } catch (e) { status(String(e), false); $("#log").textContent = String(e); }
+});
 $("#btn-publish").onclick = () => busy($("#btn-publish"), "Publishing…", () => doPublish(false).catch((e) => status(String(e), false)));
 $("#btn-reveal").onclick = () => project && invoke("reveal", { path: project.site }).catch((e) => status(String(e), false));
 $("#btn-remove-add").onclick = () => { const v = $("#remove-new").value.trim(); if (v) { project.remove.push(v); $("#remove-new").value = ""; touch(); renderRemove(); } };

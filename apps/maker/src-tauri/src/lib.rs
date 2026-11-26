@@ -131,6 +131,22 @@ fn site_status(project: Project) -> SiteStatus {
     }
 }
 
+/// The client package for new players (`otp package`): ZIP of the published master client, patcher and patcher.json.
+#[tauri::command]
+async fn make_package(project: Project, out: String, patcher: Option<String>, patcher_json: Option<String>, include_external: bool) -> Res<otp_core::package::Report> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let o = otp_core::package::Options {
+            out: out.into(),
+            patcher: patcher.filter(|p| !p.is_empty()).map(Into::into),
+            patcher_json: patcher_json.filter(|p| !p.is_empty()),
+            include_external,
+        };
+        otp_core::package::package(&project, &o, &mut |_| {}).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 /// The `patcher.json` a player's OpenThor Patcher needs next to its executable.
 #[tauri::command]
 fn patcher_config(project: Project, pub_hex: String, list_url: Option<String>, header_name: Option<String>, header_value: Option<String>) -> Res<String> {
@@ -213,6 +229,7 @@ pub fn run() {
             files_to_upload,
             site_status,
             patcher_config,
+            make_package,
             write_text,
             export_theme,
             reveal,

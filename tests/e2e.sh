@@ -340,6 +340,54 @@ grep -q '"title": "WoE this Sunday"' "$S/patchlist.json" || fail "midgard: news 
 "$OTP" news --from "file://$D/cp-down/api/v1/news.json" | grep -q "2026-11-26 WoE this Sunday" || fail "otp news preview"
 ok "MidgardCP: news from the panel API (html → patcher markup), kept when the panel is down; status URL in the list"
 
+# ---- external files (data.grf stays out of the site) and the client package for new players ----------------------------
+D="$W/package"; M="$D/m"; S="$D/site"; mkdir -p "$M/src/data" "$M/csrc/data" "$M/BGM" "$D/store"
+i=1; while [ $i -le 20 ]; do echo "base $i" > "$M/src/data/b$i.txt"; i=$((i+1)); done
+"$TK" build -o "$M/data.grf" "$M/src" >/dev/null
+echo "custom 1" > "$M/csrc/data/c1.txt"; "$TK" build -o "$M/cdata.grf" "$M/csrc" >/dev/null
+echo "music" > "$M/BGM/01.mp3"; echo "v1" > "$M/odin.cfg"
+mkdir -p "$M/skin/dark theme/img"; echo "btn" > "$M/skin/dark theme/img/btn.bmp"; echo "cfg" > "$M/skin/dark theme/skin.xml"
+mkdir -p "$M/_backup_old"; echo "old" > "$M/_backup_old/x.dll"; echo "not managed" > "$M/notes.txt"
+cp "$M/data.grf" "$D/store/data.grf"
+"$OTP" keygen --out "$D/keys" > /dev/null
+cat > "$D/project.json" <<EOF
+{"server":"PkgRO","client":"$M","site":"$S","base_urls":["file://$S"],"signing_seed":"$D/keys/signing.seed",
+ "thor":["cdata.grf"],"sync":["odin.cfg","BGM/01.mp3","skin/dark theme/*"],
+ "external":{"data.grf":["file://$D/gone/data.grf","file://$D/store/data.grf"]}}
+EOF
+"$OTP" publish --project "$D/project.json" > "$D/pub1.log" || { cat "$D/pub1.log"; fail "package publish 1"; }
+[ ! -e "$S/files/data.grf" ] || fail "external: data.grf was copied into the site"
+grep -q '"mirrors"' "$S/patchlist.json" || fail "external: second link missing in the list"
+echo "custom 2" > "$M/csrc/data/c2.txt"; rm "$M/cdata.grf"; "$TK" build -o "$M/cdata.grf" "$M/csrc" >/dev/null
+"$OTP" publish --project "$D/project.json" > "$D/pub2.log" || { cat "$D/pub2.log"; fail "package publish 2"; }
+grep -q "0001-cdata.thor" "$D/pub2.log" || { cat "$D/pub2.log"; fail "package: cdata patch missing"; }
+ok "external: data.grf only as hash + links in the list, never copied into the site"
+echo "fake patcher" > "$D/openthor-patcher.exe"; echo '{"name":"PkgRO","patch_url":"x"}' > "$D/patcher.json"
+"$OTP" package --project "$D/project.json" --out "$D/pkg/PkgRO.zip" --patcher "$D/openthor-patcher.exe" --patcher-json "$D/patcher.json" > "$D/pkg.log" || { cat "$D/pkg.log"; fail "package"; }
+grep -q "left out (the patcher downloads them): data.grf" "$D/pkg.log" || { cat "$D/pkg.log"; fail "package: data.grf not left out"; }
+P="$D/player"; mkdir -p "$P"; (cd "$P" && unzip -q "$D/pkg/PkgRO.zip") || fail "package unzip"
+[ -f "$P/openthor-patcher.exe" ] && [ -f "$P/patcher.json" ] && [ -f "$P/cdata.grf" ] && [ -f "$P/BGM/01.mp3" ] && [ ! -e "$P/data.grf" ] || fail "package content"
+[ -f "$P/skin/dark theme/img/btn.bmp" ] || fail "package: folder sync entry (skin/dark theme/*) not packed"
+[ ! -e "$P/_backup_old" ] && [ ! -e "$P/notes.txt" ] || fail "package: unmanaged files packed"
+grep -q "notes.txt" "$D/pkg.log" || { cat "$D/pkg.log"; fail "package: no warning about unmanaged files"; }
+"$OTP" patch --url "file://$S" --client "$P" --pub "$D/keys/patcher.pub" > "$D/p1.log" 2>&1 || { cat "$D/p1.log"; fail "patch from the package"; }
+cmp "$M/data.grf" "$P/data.grf" || fail "external data.grf not downloaded"
+grep -q "trying the next link" "$D/p1.log" || { cat "$D/p1.log"; fail "external: second link not used after the first failed"; }
+grep -q "1 file(s), 0 patch(es), 0 repaired" "$D/p1.log" || { cat "$D/p1.log"; fail "a fresh package should need only the external file, no patch"; }
+"$OTP" patch --url "file://$S" --client "$P" --pub "$D/keys/patcher.pub" | grep -q "0 file(s), 0 patch(es)" || fail "package: second run not a no-op"
+echo "btn v2" > "$M/skin/dark theme/img/btn.bmp"
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "folder sync publish"
+"$OTP" patch --url "file://$S" --client "$P" --pub "$D/keys/patcher.pub" > /dev/null 2>&1 || fail "folder sync patch"
+cmp "$M/skin/dark theme/img/btn.bmp" "$P/skin/dark theme/img/btn.bmp" || fail "folder sync: changed file in skin/ not updated"
+ok "package: ZIP without data.grf; a new player gets data.grf from the second link and needs no patch (current GRF version)"
+echo "v2 unpublished" > "$M/odin.cfg"
+if "$OTP" package --project "$D/project.json" --out "$D/pkg/stale.zip" > "$D/pkg2.log" 2>&1; then fail "package of an unpublished master accepted"; fi
+grep -q "publish first" "$D/pkg2.log" || { cat "$D/pkg2.log"; fail "package: no clear message"; }
+echo "v1" > "$M/odin.cfg"
+"$OTP" package --project "$D/project.json" --out "$D/pkg/full.zip" --include-external > /dev/null || fail "package with external"
+unzip -l "$D/pkg/full.zip" | grep -q " data.grf$" || fail "package --include-external without data.grf"
+ok "package: refused when the master changed since the publish; --include-external packs data.grf too"
+
 # OdinGuard hook: after a publish the master GRFs go into the OdinGuard profile and grf-manifest.json into the site.
 # A stand-in `og` records its arguments (OG=/path/to/og runs the real program against a throw-away profile instead).
 D="$W/odinguard"; M="$D/master"; S="$D/site"

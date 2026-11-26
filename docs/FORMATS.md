@@ -68,6 +68,12 @@ gives the GRF load order; `@pack:<id>` is replaced by the pack's file only when 
 `locked`), and GRFs the player added stay after the managed ones. `servers` are TCP-checked by the player app every 30 s (green/red dot, 2.5 s timeout); `website` and `links` become the Website pill and the icon buttons (icon chosen by host name; only http/https are opened). `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)).
 Unknown fields are ignored, so lists can grow without a new schema number.
 
+`files[].mirrors` (0.3.0) are more full links to the same file, tried in order (external files such as `data.grf`,
+written by the project's `external` map; those files are never copied into the site). `targets[].current_sha256` /
+`current_id` (0.3.0) are the GRF's hash at the last publish and the patch id it corresponds to: a client package made with
+`otp package` ships that version, so a fresh install starts there instead of at the baseline. `sync` entries ending in
+`/*` (project file only) mean every file below that folder.
+
 `patcher` (0.2.0) offers a newer patcher program per platform (`windows-x64`, `windows-arm64`, `macos-arm64`,
 `macos-x64`, `linux-x64`): a patcher with a public key and an older version downloads it (SHA-256 checked), renames
 itself to `<name>.old`, puts the new file in its place and restarts with `--updated-to <version>`; the new process deletes

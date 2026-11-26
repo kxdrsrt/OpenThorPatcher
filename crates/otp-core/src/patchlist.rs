@@ -172,6 +172,10 @@ pub struct FileEntry {
     /// Relative to a base URL or a full link (cloud share link); default `files/<path>`.
     #[serde(default)]
     pub url: String,
+    /// More full links to the same file, tried in order when `url` fails (external files such as `data.grf` on MEGA and
+    /// in a GitHub release). Older patchers ignore them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mirrors: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,6 +188,12 @@ pub struct Target {
     /// Patch id the `full` copy corresponds to.
     #[serde(default)]
     pub full_id: u32,
+    /// SHA-256 of the master GRF at the last publish and the patch id it corresponds to: a client package made with
+    /// `otp package` ships this version, so a fresh client starts there instead of at the baseline.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub current_sha256: String,
+    #[serde(default)]
+    pub current_id: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

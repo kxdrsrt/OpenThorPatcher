@@ -122,6 +122,22 @@ enum Cmd {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Make the client package for new players (ZIP of the published master client + patcher + patcher.json)
+    Package {
+        #[arg(long)]
+        project: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        /// The patcher program to put next to the game
+        #[arg(long)]
+        patcher: Option<PathBuf>,
+        /// patcher.json for the players
+        #[arg(long)]
+        patcher_json: Option<PathBuf>,
+        /// Also pack the external files (data.grf ...) instead of letting the patcher download them
+        #[arg(long)]
+        include_external: bool,
+    },
     /// Show the news a web panel (MidgardCP /api/v1/news) would put into the patch list
     News {
         #[arg(long)]
@@ -279,6 +295,21 @@ fn real() -> otp_core::Result<()> {
             })?;
             let size = std::fs::metadata(&out).map_err(|e| otp_core::io_err(&out, e))?.len();
             println!("{}: {} bytes, sha256 {}", out.display(), size, otp_core::sha256_file(&out)?);
+        }
+        Cmd::Package { project, out, patcher, patcher_json, include_external } => {
+            let p = Project::load(&project)?;
+            let patcher_json = match patcher_json {
+                Some(f) => Some(std::fs::read_to_string(&f).map_err(|e| otp_core::io_err(&f, e))?),
+                None => None,
+            };
+            let r = otp_core::package::package(&p, &otp_core::package::Options { out, patcher, patcher_json, include_external }, &mut |s| println!("{s}"))?;
+            for w in &r.warnings {
+                println!("warning: {w}");
+            }
+            if !r.left_out.is_empty() {
+                println!("left out (the patcher downloads them): {}", r.left_out.join(", "));
+            }
+            println!("{}: {} files, {} bytes, sha256 {}", r.out.display(), r.files, r.size, r.sha256);
         }
         Cmd::News { from } => {
             for n in otp_core::midgard::fetch_news(&from)? {

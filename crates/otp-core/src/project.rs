@@ -79,6 +79,11 @@ pub struct Project {
     pub status_url: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub status_realm: String,
+    /// Big files that are not part of the patch site (`data.grf`): path → download links (MEGA, a GitHub release, any
+    /// https). The list carries their size and SHA-256; a player who lacks the file or has another version gets it from
+    /// the first link that works. Publish never copies them. Change such a file rarely: every change is a full download.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub external: BTreeMap<String, Vec<String>>,
     /// Patcher programs to offer as a self-update (written to `patcher/` of the site).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patcher: Option<PatcherCfg>,
@@ -139,6 +144,7 @@ impl Project {
             news_from: String::new(),
             status_url: String::new(),
             status_realm: String::new(),
+            external: BTreeMap::new(),
             patcher: None,
         }
     }
@@ -207,6 +213,35 @@ pub struct ScanItem {
 const IGNORE_DIRS: &[&str] = &["screenshot", "replay", "savedata", "_patch", "memo", "_tmpemblem", "emblem", "_backup", "backup"];
 
 /// Lists the master client folder (top level and one folder deep for loose files) with a suggestion per file.
+/// Total size and number of files below a folder.
+pub fn folder_size(dir: &Path) -> (u64, usize) {
+    let (mut size, mut n) = (0, 0);
+    for f in folder_files(dir) {
+        size += std::fs::metadata(&f).map(|m| m.len()).unwrap_or(0);
+        n += 1;
+    }
+    (size, n)
+}
+
+/// Every file below `dir` (recursive, sorted), without temporary files.
+pub fn folder_files(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let p = e.path();
+            let lower = e.file_name().to_string_lossy().to_ascii_lowercase();
+            if p.is_dir() {
+                stack.push(p);
+            } else if ![".part", ".bak", ".log", ".tmp"].iter().any(|x| lower.ends_with(x)) && lower != ".ds_store" && lower != "thumbs.db" {
+                out.push(p);
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
 pub fn scan_client(dir: &Path) -> Result<Vec<ScanItem>> {
     let mut out = Vec::new();
     fn walk(root: &Path, dir: &Path, depth: u32, out: &mut Vec<ScanItem>) -> Result<()> {
@@ -222,6 +257,10 @@ pub fn scan_client(dir: &Path) -> Result<Vec<ScanItem>> {
                 }
                 if depth < 2 {
                     walk(root, &p, depth + 1, out)?;
+                } else {
+                    // deeper folders (skins, themes) are one entry: `folder/*` syncs every file in it
+                    let (size, _) = folder_size(&p);
+                    out.push(ScanItem { path: format!("{rel}/*"), size, suggest: Suggest::Sync });
                 }
                 continue;
             }

@@ -12,6 +12,7 @@ pub mod fetch;
 pub mod launch;
 pub mod mega;
 pub mod midgard;
+pub mod package;
 pub mod patchlist;
 pub mod project;
 pub mod providers;

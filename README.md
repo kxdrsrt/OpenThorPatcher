@@ -28,7 +28,7 @@
 
 ## Status: pre-release, not production-ready yet
 
-**v0.2.0 is a pre-release.** The core, the CLI, the MCP server and both apps work and are tested (unit tests, the
+**v0.3.0 is a pre-release.** The core, the CLI, the MCP server and both apps work and are tested (unit tests, the
 end-to-end script `tests/e2e.sh` with plain and encrypted GRFs, a tampered patch list, a broken download, file removal and
 the classic `plist.txt` layout, and a run against a real 2.5 GB `data.grf`). It is **not** a stable production version:
 
@@ -97,6 +97,7 @@ swapped in; the old file is **replaced completely**, a `.bak` only stays with `-
   unchanged (merge patches and loose-file patches).
 - **Several sources, one master version:** the patch list is read from every source you give, the newest valid one wins, a stale or dead mirror changes nothing, a client never rolls back, every file is checked by SHA-256 (see [docs/HOSTING.md](docs/HOSTING.md)).
 - **Hosting freedom:** static host, S3/R2, GitHub Releases, **GitHub / GitLab repositories** (`gh:owner/repo@main`, `gl:group/project@main`, private ones with a read-only token), Google Drive / Dropbox / OneDrive share links or **MEGA file links** (decrypted on the fly, resumable). See [docs/HOSTING.md](docs/HOSTING.md).
+- **Big base files stay outside:** `data.grf` (gigabytes) is only a hash and download links (MEGA, a release, your server) in the list; `otp package` makes the new-player ZIP without it, and the patcher fetches it on the first start. The master client stays on your computer.
 - **Fast and polite:** up to 4 downloads at the same time (configurable) and an optional bandwidth limit for all of them together.
 - **Self-update:** the signed patch list can offer a newer patcher; it replaces itself before patching (SHA-256 checked, never loops on a wrong build).
 - **MidgardCP:** news written once in the web panel arrive in the signed patch list at every publish; the patcher shows the realm's players online.

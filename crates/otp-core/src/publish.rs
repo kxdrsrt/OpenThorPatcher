@@ -145,6 +145,34 @@ fn norm(rel: &str) -> String {
     rel.replace('\\', "/").trim_start_matches("./").to_string()
 }
 
+/// The sync list with `folder/*` entries replaced by the files below the folder.
+pub fn expand_sync(p: &Project) -> Result<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for e in &p.sync {
+        let e = norm(e);
+        match e.strip_suffix("/*") {
+            Some(dir) => {
+                let root = p.client.join(safe_rel(dir)?);
+                if !root.is_dir() {
+                    return Err(msg(format!("sync folder {dir} is not in the master client")));
+                }
+                for f in crate::project::folder_files(&root) {
+                    let rel = f.strip_prefix(&p.client).unwrap_or(&f).components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect::<Vec<_>>().join("/");
+                    if !out.contains(&rel) {
+                        out.push(rel);
+                    }
+                }
+            }
+            None => {
+                if !out.contains(&e) {
+                    out.push(e);
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn check_project(p: &Project) -> Result<()> {
     if p.server.trim().is_empty() {
         return Err(msg("the project needs a server name"));
@@ -158,6 +186,15 @@ fn check_project(p: &Project) -> Result<()> {
     for t in &p.thor {
         if p.sync.iter().any(|s| norm(s) == norm(t)) {
             return Err(msg(format!("{t} is listed for patching and for whole-file sync; pick one")));
+        }
+    }
+    for (e, links) in &p.external {
+        safe_rel(e)?;
+        if p.sync.iter().chain(&p.thor).any(|s| norm(s) == norm(e)) {
+            return Err(msg(format!("{e} is external and also published; pick one")));
+        }
+        if links.is_empty() || !links.iter().all(|l| crate::providers::is_absolute(l)) {
+            return Err(msg(format!("external file {e} needs at least one full download link (https://…, mega:…, gdrive:…)")));
         }
     }
     for r in &p.remove {
@@ -212,9 +249,9 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
         rep.plan.push(PlanItem { kind: kind.into(), name: name.into(), detail, size });
     };
 
-    // whole files
+    // whole files; `folder/*` means every file below the folder
     let old_files: HashMap<String, FileEntry> = list.files.drain(..).map(|f| (f.path.clone(), f)).collect();
-    for rel in &p.sync {
+    for rel in &expand_sync(p)? {
         let rel = norm(rel);
         let src = p.client.join(&rel);
         if !src.is_file() {
@@ -235,7 +272,32 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
             plan(&mut rep, "file", &rel, "new or changed".into(), size);
             rep.files_updated.push(rel.clone());
         }
-        list.files.push(FileEntry { path: rel.clone(), size, sha256: sha, url: format!("files/{rel}") });
+        list.files.push(FileEntry { path: rel.clone(), size, sha256: sha, url: format!("files/{rel}"), mirrors: vec![] });
+    }
+
+    // external files: only size, hash and links; the file itself stays where the operator put it
+    for (rel, links) in &p.external {
+        let rel = norm(rel);
+        let src = p.client.join(&rel);
+        if !src.is_file() {
+            return Err(msg(format!("external file {rel} is not in the master client")));
+        }
+        let size = std::fs::metadata(&src).map_err(|e| io_err(&src, e))?.len();
+        let old = old_files.get(&rel);
+        // the hash of a big file is only computed again when its size changed or it was not known
+        let sha = match old {
+            Some(f) if f.size == size && std::env::var_os("OTP_REHASH").is_none() => f.sha256.clone(),
+            _ => {
+                log(&format!("hashing {rel} ..."));
+                sha256_file(&src)?
+            }
+        };
+        if old.is_none_or(|f| f.sha256 != sha) {
+            log(&format!("external {rel} ({size} bytes): players without this version download it from {}", links[0]));
+            plan(&mut rep, "external", &rel, format!("{} link(s), not uploaded with the site", links.len()), size);
+            rep.files_updated.push(rel.clone());
+        }
+        list.files.push(FileEntry { path: rel.clone(), size, sha256: sha, url: links[0].clone(), mirrors: links[1..].to_vec() });
     }
 
     // Thor targets
@@ -258,7 +320,7 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
 
         let Some(prev) = prev else {
             let base = sha256_file(&src)?;
-            list.targets.insert(rel.clone(), Target { baseline_sha256: base, full: None, full_id: 0 });
+            list.targets.insert(rel.clone(), Target { baseline_sha256: base.clone(), full: None, full_id: 0, current_sha256: base, current_id: 0 });
             if !dry_run {
                 write_atomic(&state_path, &serde_json::to_vec(&new_state)?)?;
                 if p.full {
@@ -325,6 +387,15 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
             if p.full {
                 publish_full(p, &mut list, rel, &src)?;
             }
+            let id = list.patches.iter().filter(|x| &x.target == rel).map(|x| x.id).max().unwrap_or(0);
+            let unchanged = list.targets.get(rel).is_some_and(|t| t.current_id == id && !t.current_sha256.is_empty()) && changed_idx.is_empty() && removed.is_empty();
+            if !unchanged {
+                let sha = sha256_file(&src)?;
+                if let Some(t) = list.targets.get_mut(rel) {
+                    t.current_sha256 = sha;
+                    t.current_id = id;
+                }
+            }
         }
     }
     for r in &list.remove {
@@ -356,13 +427,13 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
                 plan(&mut rep, "patcher", &rel, format!("self-update to {}", pc.version), size);
             }
             let url = p.url_map.get(&format!("patcher/{rel}")).cloned().unwrap_or_else(|| format!("patcher/{rel}"));
-            rel_files.insert(platform.clone(), FileEntry { path: rel, size, sha256: sha, url });
+            rel_files.insert(platform.clone(), FileEntry { path: rel, size, sha256: sha, url, mirrors: vec![] });
         }
         list.patcher = Some(PatcherRelease { version: pc.version.clone(), notes: pc.notes.clone(), files: rel_files });
     }
 
     // full links for cloud hosting
-    for f in list.files.iter_mut() {
+    for f in list.files.iter_mut().filter(|f| !p.external.contains_key(&f.path)) {
         if let Some(u) = p.url_map.get(&format!("files/{}", f.path)) {
             f.url = u.clone();
         }
@@ -470,7 +541,7 @@ fn publish_full(p: &Project, list: &mut PatchList, name: &str, src: &Path) -> Re
     std::fs::copy(src, &dest).map_err(|e| io_err(src, e))?;
     let size = std::fs::metadata(&dest).map_err(|e| io_err(&dest, e))?.len();
     let latest = list.patches.iter().filter(|x| x.target == name).map(|x| x.id).max().unwrap_or(0);
-    let entry = FileEntry { path: name.to_string(), size, sha256: sha256_file(&dest)?, url: format!("files/{name}") };
+    let entry = FileEntry { path: name.to_string(), size, sha256: sha256_file(&dest)?, url: format!("files/{name}"), mirrors: vec![] };
     if let Some(t) = list.targets.get_mut(name) {
         t.full_id = latest;
         t.full = Some(entry);

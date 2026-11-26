@@ -348,12 +348,21 @@ pub(crate) fn get(cfg: &Config, list: &PatchList, rel: &str, dest: &Path, size: 
 
 fn get_file(cfg: &Config, list: &PatchList, f: &FileEntry, dest: &Path, ev: &mut dyn FnMut(Event)) -> Result<()> {
     let rel = if f.url.is_empty() { format!("files/{}", f.path) } else { f.url.clone() };
-    get(cfg, list, &rel, dest, f.size, &f.sha256, ev)
+    let mut r = get(cfg, list, &rel, dest, f.size, &f.sha256, ev);
+    for alt in &f.mirrors {
+        match r {
+            Ok(()) | Err(Error::Cancelled) => break,
+            Err(_) => r = get(cfg, list, alt, dest, f.size, &f.sha256, ev),
+        }
+    }
+    r
 }
 
 /// One download of a step: site-relative path or full link, destination, size and SHA-256 from the list.
 struct Job {
     rel: String,
+    /// more full links to the same file, tried in order when `rel` fails
+    alts: Vec<String>,
     dest: PathBuf,
     size: u64,
     sha: String,
@@ -392,9 +401,18 @@ fn fetch_all(cfg: &Config, list: &PatchList, jobs: Vec<Job>, ev: &mut dyn FnMut(
                     break;
                 }
                 let j = &jobs[i];
-                let r = get(cfg, list, &j.rel, &j.dest, j.size, &j.sha, &mut |e| {
-                    let _ = tx.send(Msg::Ev(e));
-                });
+                let mut r = Err(Error::Cancelled);
+                for (n, rel) in std::iter::once(&j.rel).chain(j.alts.iter()).enumerate() {
+                    if n > 0 {
+                        let _ = tx.send(Msg::Ev(Event::Info(format!("trying the next link for {}", j.dest.file_name().unwrap_or_default().to_string_lossy()))));
+                    }
+                    r = get(cfg, list, rel, &j.dest, j.size, &j.sha, &mut |e| {
+                        let _ = tx.send(Msg::Ev(e));
+                    });
+                    if !matches!(r, Err(ref e) if !matches!(e, Error::Cancelled)) {
+                        break;
+                    }
+                }
                 if r.is_err() {
                     stop.store(true, Ordering::SeqCst);
                 }
@@ -430,7 +448,7 @@ fn fetch_all(cfg: &Config, list: &PatchList, jobs: Vec<Job>, ev: &mut dyn FnMut(
 }
 
 fn file_job(f: &FileEntry, dest: PathBuf) -> Job {
-    Job { rel: if f.url.is_empty() { format!("files/{}", f.path) } else { f.url.clone() }, dest, size: f.size, sha: f.sha256.clone() }
+    Job { rel: if f.url.is_empty() { format!("files/{}", f.path) } else { f.url.clone() }, alts: f.mirrors.clone(), dest, size: f.size, sha: f.sha256.clone() }
 }
 
 fn remove_paths(cfg: &Config, list: &PatchList, sum: &mut Summary, ev: &mut dyn FnMut(Event)) -> Result<()> {
@@ -526,6 +544,7 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
         let current = match st.targets.get(name) {
             Some(a) if a.sha256 == local_sha => Some(a.id),
             _ if local_sha.eq_ignore_ascii_case(&target.baseline_sha256) => Some(0),
+            _ if !target.current_sha256.is_empty() && local_sha.eq_ignore_ascii_case(&target.current_sha256) => Some(target.current_id),
             _ => None,
         };
         let mut id = match current {
@@ -558,7 +577,7 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
             // every patch of this GRF is downloaded first (several at a time), then they are applied in order
             let jobs = todo
                 .iter()
-                .map(|p| Ok(Job { rel: if p.url.is_empty() { p.file.clone() } else { p.url.clone() }, dest: dl.join(safe_rel(&p.file)?), size: p.size, sha: p.sha256.clone() }))
+                .map(|p| Ok(Job { rel: if p.url.is_empty() { p.file.clone() } else { p.url.clone() }, alts: vec![], dest: dl.join(safe_rel(&p.file)?), size: p.size, sha: p.sha256.clone() }))
                 .collect::<Result<Vec<_>>>()?;
             fetch_all(cfg, &list, jobs, ev)?;
         }
