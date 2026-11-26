@@ -51,6 +51,11 @@ GRF.
 sets `locked_by_server` for the pack, or, when it is only enforced for some game modes, the patcher shows a short note
 ("battlegrounds need this pack") next to the switch. The server is the authority either way.
 
+The player can also switch the pack in the game (OdinGuard's `!dark on|off`, which edits `DATA.INI` for the next start).
+Since 0.4.1 the patcher notices that: it remembers the `[Data]` list it wrote last, and when `DATA.INI` differs, the packs
+found there become the player's choice, so the next patch run does not undo `!dark` (and the switch in the patcher shows
+the same state). Unit test `dark_toggled_in_game_is_kept_and_the_patcher_switch_still_wins`.
+
 ## 4. What the patcher must never do
 
 It must not hide, rename or "repair around" files the guard checks, must not disable the guard, and must not ship an

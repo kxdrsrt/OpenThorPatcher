@@ -142,6 +142,10 @@ struct State {
 pub struct Prefs {
     /// pack id -> on/off
     pub packs: BTreeMap<String, bool>,
+    /// The `[Data]` list the patcher wrote last. When `DATA.INI` differs, something else changed it (OdinGuard's
+    /// `!dark`), and the packs it switched count as the player's new choice.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub last_data_ini: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize)]
@@ -701,18 +705,42 @@ fn grf_manifest_check(cfg: &Config, list: &PatchList, ev: &mut dyn FnMut(Event))
     bad
 }
 
+/// The player's pack choices, with changes made to `DATA.INI` outside the patcher (OdinGuard's `!dark`) taken over.
+pub fn pack_choices(dir: &Path, di: &crate::patchlist::DataIniCfg) -> Prefs {
+    let mut prefs = load_prefs(dir);
+    let existing = dataini::read(&dir.join("DATA.INI"));
+    let changed_outside = prefs.last_data_ini.is_empty() || !same_list(&existing, &prefs.last_data_ini);
+    if changed_outside && !existing.is_empty() {
+        for p in &di.packs {
+            let listed = existing.iter().any(|f| f.eq_ignore_ascii_case(&p.file));
+            // before the patcher ever wrote DATA.INI, only a pack that is listed says something; a missing one keeps
+            // the stored choice or the pack's default
+            if listed || !prefs.last_data_ini.is_empty() {
+                prefs.packs.insert(p.id.clone(), listed);
+            }
+        }
+    }
+    prefs
+}
+
+fn same_list(a: &[String], b: &[String]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_ignore_ascii_case(y))
+}
+
 /// Rewrites `[Data]` of `DATA.INI` from the server's order and the player's pack choices. Returns whether it changed.
 pub fn write_data_ini(cfg: &Config, list: &PatchList) -> Result<bool> {
     let Some(di) = &list.data_ini else { return Ok(false) };
-    let prefs = load_prefs(&cfg.client_dir);
+    let mut prefs = pack_choices(&cfg.client_dir, di);
     let path = cfg.client_dir.join("DATA.INI");
     let existing = dataini::read(&path);
     let want = dataini::plan(&di.order, &di.packs, &prefs.packs, &existing);
-    if want == existing {
-        return Ok(false);
+    let changed = want != existing;
+    if changed {
+        dataini::write(&path, &want)?;
     }
-    dataini::write(&path, &want)?;
-    Ok(true)
+    prefs.last_data_ini = want;
+    save_prefs(&cfg.client_dir, &prefs)?;
+    Ok(changed)
 }
 
 /// Switches a pack on or off for this player and rewrites `DATA.INI` (needs the patch list for the pack definitions).
@@ -723,8 +751,10 @@ pub fn set_pack(cfg: &Config, pack_id: &str, on: bool) -> Result<bool> {
     if pack.locked && !on {
         return Err(msg("this pack is required by the server"));
     }
-    let mut prefs = load_prefs(&cfg.client_dir);
+    let mut prefs = pack_choices(&cfg.client_dir, di);
     prefs.packs.insert(pack_id.to_string(), on);
+    // the choice is made now; the current DATA.INI must not override it
+    prefs.last_data_ini = dataini::read(&cfg.client_dir.join("DATA.INI"));
     save_prefs(&cfg.client_dir, &prefs)?;
     write_data_ini(cfg, &list)
 }
@@ -764,4 +794,45 @@ fn run_legacy(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
         ev(Event::Applied { target: "classic".into(), id });
     }
     Ok(sum)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::patchlist::{DataIniCfg, Pack};
+
+    #[test]
+    fn dark_toggled_in_game_is_kept_and_the_patcher_switch_still_wins() {
+        let d = std::env::temp_dir().join(format!("otp-packs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(patch_dir(&d)).unwrap();
+        let ini = d.join("DATA.INI");
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let di = DataIniCfg {
+            order: s(&["odin.grf", "@pack:comp", "data.grf"]),
+            packs: vec![Pack { id: "comp".into(), file: "odin-dark.grf".into(), ..Default::default() }],
+        };
+        // a player who used !dark before the patcher existed keeps the pack
+        dataini::write(&ini, &s(&["odin.grf", "odin-dark.grf", "data.grf"])).unwrap();
+        assert_eq!(pack_choices(&d, &di).packs.get("comp"), Some(&true));
+        // a fresh client without it: no choice yet, the pack's default applies
+        dataini::write(&ini, &s(&["odin.grf", "data.grf"])).unwrap();
+        assert_eq!(pack_choices(&d, &di).packs.get("comp"), None);
+        // the patcher wrote the list; then !dark on in the game
+        save_prefs(&d, &Prefs { packs: BTreeMap::new(), last_data_ini: s(&["odin.grf", "data.grf"]) }).unwrap();
+        dataini::write(&ini, &s(&["odin.grf", "odin-dark.grf", "data.grf"])).unwrap();
+        let p = pack_choices(&d, &di);
+        assert_eq!(p.packs.get("comp"), Some(&true));
+        assert_eq!(dataini::plan(&di.order, &di.packs, &p.packs, &dataini::read(&ini)), s(&["odin.grf", "odin-dark.grf", "data.grf"]));
+        // !dark off in the game is taken over too
+        save_prefs(&d, &Prefs { packs: p.packs.clone(), last_data_ini: s(&["odin.grf", "odin-dark.grf", "data.grf"]) }).unwrap();
+        dataini::write(&ini, &s(&["odin.grf", "data.grf"])).unwrap();
+        assert_eq!(pack_choices(&d, &di).packs.get("comp"), Some(&false));
+        // nothing changed outside: the stored choice (the patcher's switch) stays
+        let mut on = BTreeMap::new();
+        on.insert("comp".to_string(), true);
+        save_prefs(&d, &Prefs { packs: on, last_data_ini: s(&["odin.grf", "data.grf"]) }).unwrap();
+        assert_eq!(pack_choices(&d, &di).packs.get("comp"), Some(&true));
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

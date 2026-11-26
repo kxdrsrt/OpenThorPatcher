@@ -262,11 +262,11 @@ async fn check(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
         c.force_check = force;
         let summary = if open { sync::run(&c, &mut |_| {}).map_err(err)? } else { Summary::default() };
         let l = list.ok();
-        let prefs = sync::load_prefs(&c.client_dir);
         let packs = l
             .as_ref()
             .and_then(|l| l.data_ini.as_ref())
-            .map(|d| d.packs.iter().map(|p| PackInfo { id: p.id.clone(), title: if p.title.is_empty() { p.id.clone() } else { p.title.clone() }, on: p.locked || prefs.packs.get(&p.id).copied().unwrap_or(p.default), locked: p.locked }).collect())
+            .map(|d| (d, sync::pack_choices(&c.client_dir, d)))
+            .map(|(d, prefs)| d.packs.iter().map(|p| PackInfo { id: p.id.clone(), title: if p.title.is_empty() { p.id.clone() } else { p.title.clone() }, on: p.locked || prefs.packs.get(&p.id).copied().unwrap_or(p.default), locked: p.locked }).collect())
             .unwrap_or_default();
         let game = l.as_ref().and_then(|l| l.client.clone()).filter(|g| !g.exe.is_empty()).unwrap_or_else(|| ClientCfg {
             exe: cfg.game_exe.clone().unwrap_or_default(),
