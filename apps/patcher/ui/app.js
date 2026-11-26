@@ -7,7 +7,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const icon = (n) => `<svg class="ic" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const human = (n) => { const u = ["B", "KB", "MB", "GB"]; let i = 0, v = Number(n) || 0; while (v >= 1024 && i < 3) { v /= 1024; i++; } return (i ? v.toFixed(1) : Math.round(v)) + " " + u[i]; };
 
-let info = null, checked = null, patching = false, toastTimer = 0;
+let info = null, checked = null, patching = false, toastTimer = 0, multi = false;
 
 /* Tiny markup for news bodies, escaped first: blank line = paragraph, "- " = list item, **bold**, [text](https://link). */
 function markup(text) {
@@ -42,6 +42,21 @@ function renderChangelog(c) {
   const items = c?.changelog || [];
   if (!items.length) { root.innerHTML = `<div class="empty-note">No changelog yet.</div>`; return; }
   root.innerHTML = items.map((e) => `<article class="change-entry"><div>${e.version ? `<span class="ver">${esc(e.version)}</span>` : ""}<time>${esc(e.date)}</time></div>${e.title ? `<h4>${esc(e.title)}</h4>` : ""}<ul>${(e.items || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></article>`).join("");
+}
+
+/* Players online from the web panel (MidgardCP), next to the server dots. */
+async function refreshOnline() {
+  const o = $("#online");
+  if (!checked || !checked.has_status) { o.hidden = true; return; }
+  let r = null;
+  try { r = await invoke("panel_status"); } catch { r = null; }
+  if (!r) { o.hidden = true; return; }
+  o.hidden = false;
+  const down = r.state === "offline";
+  o.className = "online " + (r.state === "online" ? "ok" : r.state === "degraded" ? "warn" : down ? "bad" : "neutral");
+  o.textContent = down ? "offline" : r.players != null ? `${r.players} online` : r.state === "unknown" ? "" : r.state;
+  o.hidden = !o.textContent;
+  o.title = `${r.name}: ${r.state}`;
 }
 
 /* Server status at the top left: one dot per server (login, char, map), refreshed every 30 s. */
@@ -195,11 +210,26 @@ async function check(force = false) {
   buttons();
   renderPacks();
   refreshServers();
+  refreshOnline();
+  if (checked.update_warning) { toast(checked.update_warning, "warn"); log(checked.update_warning); }
   return checked;
 }
 
-async function patch(force = false) {
+/* A newer patcher from the server: install it first (the patcher restarts itself), then patch with the new one. */
+async function selfUpdate() {
   patching = true;
+  buttons();
+  state("busy", `Updating the patcher to ${checked.update.version}…`, "It restarts by itself.", "update");
+  bar(0, 0);
+  try { await invoke("update_patcher"); }
+  catch (e) { patching = false; toast("Patcher update failed: " + String(e), "bad"); log("error: " + String(e)); buttons(); return false; }
+  return true;
+}
+
+async function patch(force = false) {
+  if (checked && checked.update && await selfUpdate()) return;
+  patching = true;
+  multi = false;
   $("#log").textContent = "";
   state("busy", "Updating…", "Do not close the patcher.", "update");
   bar(0, 0);
@@ -237,15 +267,20 @@ async function openSettings() {
   $("#s-dir").value = info.client_dir;
   $("#s-auto").checked = info.auto_update;
   $("#s-bak").checked = info.keep_backup;
+  $("#s-par").value = info.parallel;
+  $("#s-kbps").value = info.max_kbps;
   $("#scrim").hidden = false;
   $("#dlg").showModal();
 }
 
 async function saveSettings() {
   try {
-    await invoke("set_settings", { clientDir: $("#s-dir").value, autoUpdate: $("#s-auto").checked, keepBackup: $("#s-bak").checked });
+    const parallel = Math.min(16, Math.max(1, parseInt($("#s-par").value, 10) || 4));
+    const maxKbps = Math.max(0, parseInt($("#s-kbps").value, 10) || 0);
+    await invoke("set_settings", { clientDir: $("#s-dir").value, autoUpdate: $("#s-auto").checked, keepBackup: $("#s-bak").checked, parallel, maxKbps });
     const changed = $("#s-dir").value !== info.client_dir;
     info.client_dir = $("#s-dir").value; info.auto_update = $("#s-auto").checked; info.keep_backup = $("#s-bak").checked;
+    info.parallel = parallel; info.max_kbps = maxKbps;
     if (changed) { await loadTheme(); check(false); }
   } catch (e) { toast(String(e), "bad"); }
 }
@@ -285,7 +320,7 @@ $("#btn-play").onclick = () => invoke("play").then(() => toast("Starting the gam
 $("#btn-setup").onclick = () => invoke("setup").catch((e) => toast(String(e), "bad"));
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
-setInterval(() => { if (!patching) refreshServers(); }, 30000);
+setInterval(() => { if (!patching) { refreshServers(); refreshOnline(); } }, 30000);
 
 (async () => {
   await T.event.listen("progress", (ev) => {
@@ -293,7 +328,10 @@ setInterval(() => { if (!patching) refreshServers(); }, 30000);
     if (p.kind === "info") log(p.text);
     else if (p.kind === "download") {
       $("#p-name").textContent = p.name;
-      $("#p-size").textContent = p.total ? `${human(p.done)} / ${human(p.total)}` : human(p.done);
+      if (!multi) { $("#p-size").textContent = p.total ? `${human(p.done)} / ${human(p.total)}` : human(p.done); bar(p.done, p.total); }
+    } else if (p.kind === "total") {
+      multi = true;
+      $("#p-size").textContent = `${human(p.done)} / ${human(p.total)}`;
       bar(p.done, p.total);
     } else if (p.kind === "applied") { log(`${p.target}: patch ${p.id} applied`); bar(0, 0); $("#p-name").textContent = "Applying…"; $("#p-size").textContent = ""; }
     else if (p.kind === "removed") log("removed " + p.path);
@@ -305,5 +343,6 @@ setInterval(() => { if (!patching) refreshServers(); }, 30000);
   await loadTheme();
   if (info.error) { state("bad", "Not configured", info.error, "error"); idle(); buttons(); return; }
   const c = await check(false);
+  if (c && c.update && await selfUpdate()) return;
   if (c && c.open && !upToDate(c.summary) && info.auto_update) patch(false);
 })();

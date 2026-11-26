@@ -1,5 +1,6 @@
-//! Downloads. `http(s)://` with resume (Range), `file://` (tests, local mirrors, a USB stick), and cloud share links
-//! (see [`crate::providers`]).
+//! Downloads. `http(s)://` with resume (Range), `file://` (tests, local mirrors, a USB stick), cloud share links
+//! (see [`crate::providers`]) and MEGA file links (see [`crate::mega`]). An optional bandwidth limit applies to all
+//! downloads of the process together.
 
 use crate::providers::{is_absolute, resolve};
 use crate::{io_err, msg, sha256_file, Error, Result};
@@ -16,6 +17,35 @@ pub struct Auth {
 }
 
 static AUTH: Mutex<Option<Auth>> = Mutex::new(None);
+static RATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static BUCKET: Mutex<Option<(std::time::Instant, f64)>> = Mutex::new(None);
+
+/// Bandwidth limit for all downloads together, in bytes per second; 0 = no limit.
+pub fn set_rate_limit(bytes_per_sec: u64) {
+    RATE.store(bytes_per_sec, std::sync::atomic::Ordering::Relaxed);
+    if let Ok(mut b) = BUCKET.lock() {
+        *b = None;
+    }
+}
+
+/// Token bucket shared by every download thread: takes `n` bytes and sleeps while the bucket is in debt.
+fn throttle(n: usize) {
+    let rate = RATE.load(std::sync::atomic::Ordering::Relaxed) as f64;
+    if rate <= 0.0 {
+        return;
+    }
+    let wait = {
+        let Ok(mut g) = BUCKET.lock() else { return };
+        let now = std::time::Instant::now();
+        let (last, tokens) = g.unwrap_or((now, rate));
+        let tokens = (tokens + now.duration_since(last).as_secs_f64() * rate).min(rate) - n as f64;
+        *g = Some((now, tokens));
+        if tokens < 0.0 { -tokens / rate } else { 0.0 }
+    };
+    if wait > 0.0 {
+        std::thread::sleep(std::time::Duration::from_secs_f64(wait.min(5.0)));
+    }
+}
 static PROXY: Mutex<Option<String>> = Mutex::new(None);
 
 /// An explicit HTTP(S) proxy (`http://host:port`, `socks5://host:port`). Without one the system settings and the
@@ -119,9 +149,42 @@ fn missing(p: &Path, e: std::io::Error) -> Error {
     }
 }
 
+/// MEGA: the temporary download address and the size of a file link (one API call).
+fn mega_resolve(url: &str) -> Result<(crate::mega::Link, String, u64)> {
+    let link = crate::mega::parse(url)?;
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let api = format!("{}/cs?id={seq}", crate::mega::api_base().trim_end_matches('/'));
+    let body = serde_json::json!([{ "a": "g", "g": 1, "ssl": 2, "p": link.id }]).to_string();
+    let r = client(Some(std::time::Duration::from_secs(60)))?.post(&api).header("Content-Type", "application/json").body(body).send()?;
+    if !r.status().is_success() {
+        return Err(Error::Net(format!("{url}: MEGA API answered HTTP {}", r.status())));
+    }
+    let v: serde_json::Value = serde_json::from_slice(&r.bytes()?)?;
+    let first = if v.is_array() { v[0].clone() } else { v };
+    if let Some(code) = first.as_i64() {
+        return Err(crate::mega::api_error(url, code));
+    }
+    if let Some(code) = first["e"].as_i64() {
+        return Err(crate::mega::api_error(url, code));
+    }
+    let g = first["g"].as_str().filter(|g| g.starts_with("http")).ok_or_else(|| msg(format!("{url}: MEGA sent no download address")))?;
+    Ok((link, g.to_string(), first["s"].as_u64().unwrap_or(0)))
+}
+
 pub fn get_bytes(url: &str) -> Result<Vec<u8>> {
     if let Some(p) = file_path(url) {
         return std::fs::read(&p).map_err(|e| missing(&p, e));
+    }
+    if crate::mega::is_mega(url) {
+        let (link, real, _) = mega_resolve(url)?;
+        let r = send(&real, None, Some(std::time::Duration::from_secs(60)))?;
+        if !r.status().is_success() {
+            return Err(status_err(url, r.status()));
+        }
+        let mut b = r.bytes()?.to_vec();
+        crate::mega::Decryptor::new(&link).apply(0, &mut b);
+        return Ok(b);
     }
     let real = resolve(url);
     let r = send(&real, None, Some(std::time::Duration::from_secs(60)))?;
@@ -150,9 +213,27 @@ pub fn download(url: &str, dest: &Path, size: u64, sha256: &str, progress: &mut 
     } else {
         let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
         let have = if size > 0 && have > size { 0 } else { have };
-        let real = resolve(url);
-        let resp = send(&real, if have > 0 { Some(have) } else { None }, None)?;
-        let resumed = resp.status().as_u16() == 206;
+        // MEGA: temporary address, resume as a "/start-end" suffix of it, decryption of every chunk
+        let mega = if crate::mega::is_mega(url) { Some(mega_resolve(url)?) } else { None };
+        let (resp, resumed) = match &mega {
+            Some((_, g, msize)) => {
+                let msize = if size > 0 { size } else { *msize };
+                let from = if msize > 0 && have >= msize { 0 } else { have };
+                let real = if from > 0 && msize > 0 { format!("{g}/{from}-{}", msize - 1) } else { g.clone() };
+                let r = send(&real, None, None)?;
+                let ok = r.status().is_success();
+                (r, ok && from > 0)
+            }
+            None => {
+                let r = send(&resolve(url), if have > 0 { Some(have) } else { None }, None)?;
+                let resumed = r.status().as_u16() == 206;
+                (r, resumed)
+            }
+        };
+        let decrypt = mega.as_ref().map(|(l, _, _)| crate::mega::Decryptor::new(l));
+        if mega.is_some() && resp.status().as_u16() == 509 {
+            return Err(msg(format!("{url}: MEGA transfer quota exceeded; try later or use another source")));
+        }
         if resp.status().as_u16() == 416 {
             // the partial file is already complete (or wrong): start over once
             let _ = std::fs::remove_file(&part);
@@ -204,8 +285,12 @@ pub fn download(url: &str, dest: &Path, size: u64, sha256: &str, progress: &mut 
         loop {
             match rx.recv_timeout(tick) {
                 Ok(Ok(chunk)) if chunk.is_empty() => break,
-                Ok(Ok(chunk)) => {
+                Ok(Ok(mut chunk)) => {
                     silent = std::time::Duration::ZERO;
+                    if let Some(d) = &decrypt {
+                        d.apply(done, &mut chunk);
+                    }
+                    throttle(chunk.len());
                     out.write_all(&chunk).map_err(|e| io_err(&part, e))?;
                     done += chunk.len() as u64;
                     if !progress(done, total) {

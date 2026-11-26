@@ -57,6 +57,15 @@ struct Cfg {
     /// For classic servers without a patch list: what to show as server status.
     #[serde(default)]
     servers: Vec<ServerEntry>,
+    /// Downloads at the same time (default 4); the player can change it in the settings.
+    #[serde(default)]
+    parallel: Option<usize>,
+    /// Bandwidth limit in KiB/s (default none); the player can change it in the settings.
+    #[serde(default)]
+    max_kbps: Option<u64>,
+    /// `false` switches the self-update off (default on; it only runs with a signed list).
+    #[serde(default)]
+    self_update: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Default)]
@@ -64,6 +73,10 @@ struct Settings {
     client_dir: Option<String>,
     auto_update: Option<bool>,
     keep_backup: Option<bool>,
+    #[serde(default)]
+    parallel: Option<usize>,
+    #[serde(default)]
+    max_kbps: Option<u64>,
 }
 
 struct App {
@@ -131,6 +144,8 @@ fn core_config(app: &tauri::AppHandle, cfg: &Cfg, st: &App) -> Config {
     c.header_hosts = cfg.header_hosts.clone();
     c.fallback_urls = cfg.fallback_urls.clone();
     c.proxy = cfg.proxy.clone();
+    c.parallel = s.parallel.or(cfg.parallel).unwrap_or(sync::DEFAULT_PARALLEL);
+    c.max_kbps = s.max_kbps.or(cfg.max_kbps).unwrap_or(0);
     c
 }
 
@@ -140,6 +155,8 @@ struct Init {
     client_dir: String,
     auto_update: bool,
     keep_backup: bool,
+    parallel: usize,
+    max_kbps: u64,
     error: Option<String>,
     version: String,
 }
@@ -148,14 +165,21 @@ struct Init {
 fn init(app: tauri::AppHandle) -> Init {
     let s = load_settings(&app);
     let version = env!("CARGO_PKG_VERSION").to_string();
-    match load_cfg() {
-        Ok(c) => Init { name: c.name, client_dir: client_dir(&app).display().to_string(), auto_update: s.auto_update.unwrap_or(true), keep_backup: s.keep_backup.unwrap_or(false), error: None, version },
-        Err(e) => Init { name: "OpenThor Patcher".into(), client_dir: client_dir(&app).display().to_string(), auto_update: true, keep_backup: false, error: Some(e), version },
+    if let Ok(exe) = std::env::current_exe() {
+        otp_core::selfupdate::cleanup(&exe);
+    }
+    let cfg = load_cfg();
+    let parallel = s.parallel.or(cfg.as_ref().ok().and_then(|c| c.parallel)).unwrap_or(sync::DEFAULT_PARALLEL);
+    let max_kbps = s.max_kbps.or(cfg.as_ref().ok().and_then(|c| c.max_kbps)).unwrap_or(0);
+    let dir = client_dir(&app).display().to_string();
+    match cfg {
+        Ok(c) => Init { name: c.name, client_dir: dir, auto_update: s.auto_update.unwrap_or(true), keep_backup: s.keep_backup.unwrap_or(false), parallel, max_kbps, error: None, version },
+        Err(e) => Init { name: "OpenThor Patcher".into(), client_dir: dir, auto_update: true, keep_backup: false, parallel, max_kbps, error: Some(e), version },
     }
 }
 
 #[tauri::command]
-fn set_settings(app: tauri::AppHandle, client_dir: Option<String>, auto_update: bool, keep_backup: bool) -> Res<()> {
+fn set_settings(app: tauri::AppHandle, client_dir: Option<String>, auto_update: bool, keep_backup: bool, parallel: Option<usize>, max_kbps: Option<u64>) -> Res<()> {
     let mut s = load_settings(&app);
     if let Some(d) = client_dir {
         if !Path::new(&d).is_dir() {
@@ -165,6 +189,12 @@ fn set_settings(app: tauri::AppHandle, client_dir: Option<String>, auto_update: 
     }
     s.auto_update = Some(auto_update);
     s.keep_backup = Some(keep_backup);
+    if let Some(n) = parallel {
+        s.parallel = Some(n.clamp(1, 16));
+    }
+    if let Some(k) = max_kbps {
+        s.max_kbps = Some(k);
+    }
     save_settings(&app, &s)
 }
 
@@ -191,6 +221,29 @@ struct Checked {
     website: String,
     links: Vec<LinkItem>,
     summary: Summary,
+    /// A newer patcher program the list offers for this computer (installed before patching).
+    update: Option<UpdateInfo>,
+    has_status: bool,
+    update_warning: String,
+}
+
+/// `--updated-to <version>`: this process was started by a self-update to that version.
+fn updated_to() -> Option<String> {
+    let a: Vec<String> = std::env::args().collect();
+    a.iter().position(|x| x == "--updated-to").and_then(|i| a.get(i + 1).cloned())
+}
+
+/// The program that a self-update just installed reports an older version than announced (a wrong build or version on the
+/// server): updating again would download the same file forever.
+fn update_loop(list: Option<&PatchList>) -> bool {
+    let Some(want) = updated_to() else { return false };
+    otp_core::selfupdate::newer(&want, env!("CARGO_PKG_VERSION")) && list.and_then(|l| l.patcher.as_ref()).is_some_and(|r| !otp_core::selfupdate::newer(&r.version, &want))
+}
+
+#[derive(Serialize)]
+struct UpdateInfo {
+    version: String,
+    notes: String,
 }
 
 #[tauri::command]
@@ -231,6 +284,21 @@ async fn check(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
             news: l.as_ref().map(|l| l.news.clone()).unwrap_or_default(),
             changelog: l.as_ref().map(|l| l.changelog.clone()).unwrap_or_default(),
             summary,
+            update: l
+                .as_ref()
+                .filter(|_| cfg.self_update.unwrap_or(true) && !cfg.pub_key.is_empty() && !update_loop(l.as_ref()))
+                .and_then(|l| otp_core::selfupdate::available(l, env!("CARGO_PKG_VERSION"), otp_core::selfupdate::platform()).map(|(v, _)| (v, l)))
+                .map(|(v, l)| UpdateInfo { version: v.to_string(), notes: l.patcher.as_ref().map(|r| r.notes.clone()).unwrap_or_default() }),
+            has_status: l.as_ref().is_some_and(|l| !l.status_url.is_empty()),
+            update_warning: if update_loop(l.as_ref()) {
+                format!(
+                    "The server's patcher build still reports version {} although it was announced as {}; the self-update is stopped (ask the server team to check the build).",
+                    env!("CARGO_PKG_VERSION"),
+                    updated_to().unwrap_or_default()
+                )
+            } else {
+                String::new()
+            },
         };
         *st.last.lock().map_err(err)? = l;
         Ok(out)
@@ -280,6 +348,7 @@ enum Progress {
     Download { name: String, done: u64, total: u64 },
     Applied { target: String, id: u32 },
     Removed { path: String },
+    Total { done: u64, total: u64 },
 }
 
 #[tauri::command]
@@ -296,6 +365,7 @@ async fn patch(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
         c.force_check = force;
         let a = app.clone();
         let mut last_emit = std::time::Instant::now();
+        let mut last_total = std::time::Instant::now();
         sync::run(&c, &mut |e| {
             let p = match e {
                 Event::Info(text) => Progress::Info { text },
@@ -308,6 +378,13 @@ async fn patch(app: tauri::AppHandle, st: State<'_, Arc<App>>, force: bool) -> R
                 }
                 Event::Applied { target, id } => Progress::Applied { target, id },
                 Event::Removed(path) => Progress::Removed { path },
+                Event::Total { done, total } => {
+                    if done < total && last_total.elapsed() < std::time::Duration::from_millis(100) {
+                        return;
+                    }
+                    last_total = std::time::Instant::now();
+                    Progress::Total { done, total }
+                }
             };
             let _ = a.emit("progress", p);
         })
@@ -460,12 +537,71 @@ fn get_theme(app: tauri::AppHandle) -> Option<Theme> {
     Some(Theme { name: j.name, author: j.author, css: inline_urls(&css, &dir), vars: j.vars, logo })
 }
 
+/// Downloads the newer patcher the signed list offers, puts it in place of this program, starts it and exits.
+#[tauri::command]
+async fn update_patcher(app: tauri::AppHandle, st: State<'_, Arc<App>>) -> Res<String> {
+    let cfg = load_cfg()?;
+    if cfg.pub_key.is_empty() || !cfg.self_update.unwrap_or(true) {
+        return Err("self-update is off (it needs pub_key in patcher.json)".into());
+    }
+    let st = st.inner().clone();
+    if st.busy.swap(true, Ordering::SeqCst) {
+        return Err("busy".into());
+    }
+    let app2 = app.clone();
+    let st2 = st.clone();
+    let res = tauri::async_runtime::spawn_blocking(move || -> Res<String> {
+        let c = core_config(&app2, &cfg, &st2);
+        let list = sync::fetch_list(&c).map_err(err)?;
+        let (v, f) = otp_core::selfupdate::available(&list, env!("CARGO_PKG_VERSION"), otp_core::selfupdate::platform()).ok_or("no newer patcher")?;
+        let (v, f) = (v.to_string(), f.clone());
+        let exe = std::env::current_exe().map_err(err)?;
+        let a = app2.clone();
+        otp_core::selfupdate::update(&c, &list, &f, &exe, &mut |e| {
+            if let Event::Download { name, done, total } = e {
+                let _ = a.emit("progress", Progress::Download { name, done, total });
+            }
+        })
+        .map_err(err)?;
+        std::process::Command::new(&exe).arg("--updated-to").arg(&v).current_dir(exe_dir()).spawn().map_err(err)?;
+        Ok(v)
+    })
+    .await
+    .map_err(err);
+    st.busy.store(false, Ordering::SeqCst);
+    let v = res??;
+    app.exit(0);
+    Ok(v)
+}
+
+/// The realm state from the web panel (`status_url` of the list, MidgardCP `/api/v1/status`).
+#[tauri::command]
+async fn panel_status(app: tauri::AppHandle, st: State<'_, Arc<App>>) -> Res<Option<otp_core::midgard::RealmState>> {
+    let (url, realm) = match st.last.lock().map_err(err)?.as_ref() {
+        Some(l) if !l.status_url.is_empty() => (l.status_url.clone(), l.status_realm.clone()),
+        _ => return Ok(None),
+    };
+    let cfg = load_cfg()?;
+    let c = core_config(&app, &cfg, &st);
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::sync_auth(&c);
+        let b = otp_core::fetch::get_bytes(&url).map_err(err)?;
+        otp_core::midgard::parse_status(&b, &realm).map(Some).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
+fn sync_auth(c: &Config) {
+    otp_core::fetch::set_proxy(c.proxy.clone());
+}
+
 pub fn run() {
     let state = Arc::new(App { cancel: Arc::new(AtomicBool::new(false)), last: Mutex::new(None), busy: AtomicBool::new(false) });
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
-        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url, server_status])
+        .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url, server_status, update_patcher, panel_status])
         .run(tauri::generate_context!())
         .expect("error while running OpenThor Patcher");
 }

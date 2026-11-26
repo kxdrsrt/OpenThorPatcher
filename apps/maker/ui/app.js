@@ -55,6 +55,13 @@ function renderProject() {
   const ogDone = () => { if (p.odinguard && !p.odinguard.profile) delete p.odinguard; };
   bind("#f-og-profile", () => p.odinguard?.profile || "", (v) => { og().profile = v; ogDone(); });
   bind("#f-og-bin", () => p.odinguard?.og || "", (v) => { if (!p.odinguard) return; if (v) p.odinguard.og = v; else delete p.odinguard.og; });
+  // self-update: no version and no program = off
+  const pu = () => p.patcher || (p.patcher = { version: "", files: {} });
+  const puDone = () => { if (p.patcher && !p.patcher.version && !Object.keys(p.patcher.files).length) delete p.patcher; };
+  const puFile = (k) => (v) => { const x = pu(); if (v) x.files[k] = v; else delete x.files[k]; puDone(); };
+  bind("#u-ver", () => p.patcher?.version || "", (v) => { pu().version = v.trim(); puDone(); });
+  bind("#u-win", () => p.patcher?.files?.["windows-x64"] || "", puFile("windows-x64"));
+  bind("#u-mac", () => p.patcher?.files?.["macos-arm64"] || "", puFile("macos-arm64"));
   renderStatus();
   loadPub();
 }
@@ -194,6 +201,9 @@ function today() { return new Date().toISOString().slice(0, 10); }
 function renderNewsPage() {
   bind("#n-url2", () => project.news_url, (v) => (project.news_url = v));
   bind("#w-url", () => project.website, (v) => (project.website = v));
+  bind("#cp-news", () => project.news_from || "", (v) => (project.news_from = v.trim()));
+  bind("#cp-status", () => project.status_url || "", (v) => (project.status_url = v.trim()));
+  bind("#cp-realm", () => project.status_realm || "", (v) => (project.status_realm = v.trim()));
   const ll = $("#links-list");
   ll.innerHTML = "";
   project.links.forEach((l, i) => {

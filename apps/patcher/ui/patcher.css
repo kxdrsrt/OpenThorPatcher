@@ -22,6 +22,12 @@ body { overflow: hidden; user-select: none; }
 .who > span { font-size: 15px; font-weight: 600; }
 .srv { display: flex; gap: 10px; margin-top: 3px; }
 .srv[hidden] { display: none; }
+.srvrow { display: flex; align-items: center; gap: 10px; }
+.online[hidden] { display: none; }
+.online { display: inline-block; margin-top: 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .03em; color: #5fe08a; }
+.online.warn { color: #f0c05a; }
+.online.bad { color: #ff7a7a; }
+.online.neutral { color: inherit; opacity: .8; }
 .srv-item { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; }
 .srv-item b { font-weight: 600; letter-spacing: .03em; }
 .srv-item .dot { width: 8px; height: 8px; border-radius: 50%; background: #7a869f; }

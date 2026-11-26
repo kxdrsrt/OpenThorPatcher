@@ -3,7 +3,7 @@
 //! Nobody names or numbers patches by hand: the publisher keeps an entry hash state per Thor target in
 //! `<site>/state/` and writes only the entries that changed since the last publish.
 
-use crate::patchlist::{FileEntry, PatchEntry, PatchList, Target, SCHEMA};
+use crate::patchlist::{FileEntry, PatchEntry, PatchList, PatcherRelease, Target, SCHEMA};
 use crate::project::Project;
 use crate::{io_err, msg, safe_rel, sha256_bytes, sha256_file, sign, Result};
 use rgrf_core::grfcrypt::Key;
@@ -190,9 +190,24 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     list.servers = p.servers.clone();
     list.website = p.website.clone();
     list.links = p.links.clone();
+    let previous_news = std::mem::take(&mut list.news);
     list.news = p.news.clone();
     list.changelog = p.changelog.clone();
+    list.status_url = p.status_url.clone();
+    list.status_realm = p.status_realm.clone();
     let mut rep = PublishReport { dry_run, ..Default::default() };
+    if !p.news_from.is_empty() {
+        match crate::midgard::fetch_news(&p.news_from) {
+            Ok(n) => {
+                log(&format!("news: {} item(s) from {}", n.len(), p.news_from));
+                list.news = n;
+            }
+            Err(e) => {
+                log(&format!("warning: news from {} not reachable ({e}); the news of the last publish stay", p.news_from));
+                list.news = previous_news;
+            }
+        }
+    }
     let plan = |rep: &mut PublishReport, kind: &str, name: &str, detail: String, size: u64| {
         rep.plan.push(PlanItem { kind: kind.into(), name: name.into(), detail, size });
     };
@@ -316,6 +331,36 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
         plan(&mut rep, "remove", r, "deleted from player clients".into(), 0);
     }
 
+    // patcher programs for the self-update
+    let old_patcher = list.patcher.take();
+    if let Some(pc) = &p.patcher {
+        let mut rel_files = BTreeMap::new();
+        for (platform, src) in &pc.files {
+            if !src.is_file() {
+                return Err(msg(format!("patcher program for {platform} not found: {}", src.display())));
+            }
+            let name = src.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "openthor-patcher".into());
+            let rel = format!("{platform}/{name}");
+            let sha = sha256_file(src)?;
+            let size = std::fs::metadata(src).map_err(|e| io_err(src, e))?.len();
+            let dest = p.site.join("patcher").join(&rel);
+            let same = old_patcher.as_ref().and_then(|o| o.files.get(platform)).is_some_and(|f| f.sha256 == sha) && dest.is_file();
+            if !same {
+                if !dry_run {
+                    if let Some(d) = dest.parent() {
+                        std::fs::create_dir_all(d).map_err(|e| io_err(d, e))?;
+                    }
+                    std::fs::copy(src, &dest).map_err(|e| io_err(src, e))?;
+                }
+                log(&format!("patcher {} {rel} ({size} bytes)", pc.version));
+                plan(&mut rep, "patcher", &rel, format!("self-update to {}", pc.version), size);
+            }
+            let url = p.url_map.get(&format!("patcher/{rel}")).cloned().unwrap_or_else(|| format!("patcher/{rel}"));
+            rel_files.insert(platform.clone(), FileEntry { path: rel, size, sha256: sha, url });
+        }
+        list.patcher = Some(PatcherRelease { version: pc.version.clone(), notes: pc.notes.clone(), files: rel_files });
+    }
+
     // full links for cloud hosting
     for f in list.files.iter_mut() {
         if let Some(u) = p.url_map.get(&format!("files/{}", f.path)) {
@@ -334,7 +379,8 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     }
     let missing: Vec<String> = if p.base_urls.is_empty() {
         list.files.iter().filter(|f| !crate::providers::is_absolute(&f.url)).map(|f| f.path.clone()).chain(
-            list.patches.iter().filter(|x| !crate::providers::is_absolute(&x.url)).map(|x| x.file.clone())).collect()
+            list.patches.iter().filter(|x| !crate::providers::is_absolute(&x.url)).map(|x| x.file.clone())).chain(
+            list.patcher.iter().flat_map(|r| r.files.values()).filter(|f| !crate::providers::is_absolute(&f.url)).map(|f| format!("patcher/{}", f.path))).collect()
     } else {
         vec![]
     };

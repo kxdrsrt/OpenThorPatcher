@@ -10,11 +10,22 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if",
+ "cipher 0.4.4",
+ "cpufeatures 0.2.17",
+]
+
+[[package]]
+name = "aes"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fc36d7440d015b45468ba08a21e80e056ebbd014c611c6298bb7503e04bd1"
 dependencies = [
- "cipher",
+ "cipher 0.5.2",
  "cpubits",
  "cpufeatures 0.3.1",
 ]
@@ -438,12 +449,22 @@ dependencies = [
 
 [[package]]
 name = "cipher"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
+dependencies = [
+ "crypto-common 0.1.7",
+ "inout 0.1.4",
+]
+
+[[package]]
+name = "cipher"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
 dependencies = [
  "crypto-common 0.2.2",
- "inout",
+ "inout 0.2.6",
 ]
 
 [[package]]
@@ -1849,6 +1870,15 @@ dependencies = [
 
 [[package]]
 name = "inout"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
+name = "inout"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a580c13f0ffc335ef42dd3f6b1a41b726051c5e1656d9a3aa6fddb3c5dfbbf9"
@@ -2586,7 +2616,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "openthor-maker"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otp-core",
  "serde",
@@ -2598,7 +2628,7 @@ dependencies = [
 
 [[package]]
 name = "openthor-patcher"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otp-core",
  "serde",
@@ -2616,7 +2646,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "otp-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "otp-core",
@@ -2625,8 +2655,10 @@ dependencies = [
 
 [[package]]
 name = "otp-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "aes 0.8.4",
+ "base64 0.22.1",
  "ed25519-dalek",
  "hex",
  "rand_core 0.6.4",
@@ -2640,7 +2672,7 @@ dependencies = [
 
 [[package]]
 name = "otp-mcp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "otp-core",
  "serde_json",
@@ -2648,8 +2680,9 @@ dependencies = [
 
 [[package]]
 name = "otp-testkit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "otp-core",
  "rgrf-core",
 ]
 
@@ -3278,7 +3311,7 @@ dependencies = [
 name = "rgrf-core"
 version = "0.2.3"
 dependencies = [
- "aes",
+ "aes 0.9.4",
  "crc32fast",
  "encoding_rs",
  "flate2",

@@ -32,12 +32,17 @@ Recommended for the patch site, in this order:
 | **Cloudflare R2** (S3 compatible) | No traffic fees, a custom domain, fast worldwide. Good as the second source. |
 | Backblaze B2 / MinIO / any S3 bucket | Same idea, cheap storage. |
 | GitHub / GitLab repository | Free, versioned, public or private ([below](#github-and-gitlab)). Only for `patchlist.json` and the diffs: 100 MB per file in git. |
-| Google Drive / Dropbox / OneDrive | Works through share links ([Cloud drives](#cloud-drives)), but quotas and changing links make it the fragile choice. |
+| Google Drive / Dropbox / OneDrive / MEGA | Works through share links ([Cloud drives](#cloud-drives)), but quotas and changing links make it the fragile choice. |
 
-**MEGA (mega.nz) is not suitable as a patch source.** A MEGA link is not a file URL: the content is encrypted in the
-browser with a key that sits in the link (`mega.nz/file/<id>#<key>`), and it is downloaded through MEGA's own protocol, not
-with a plain `GET` and `Range`. The patcher would need MEGA's SDK, and free accounts have transfer limits. (This is from
-MEGA's public documentation, not tested here.) MEGA is fine for job 1, the one-time full client download by hand.
+**MEGA (mega.nz) works as a source for single files** (since 0.2.0), with the URL map like the other cloud drives: paste
+the file's link (`https://mega.nz/file/<id>#<key>`, the old `https://mega.nz/#!<id>!<key>` or `mega:<id>#<key>`). The
+patcher asks MEGA's API for a temporary download address, decrypts the file (AES-128-CTR with the key from the link) and
+checks the SHA-256 from the signed list as for every other source; interrupted downloads resume. The key never goes to
+anyone but MEGA's own address scheme. Limits: free accounts have a **transfer quota** (the patcher says so clearly and
+tries the next source), and **folder links are not supported** (every file needs its own link). Because `patchlist.json`
+itself must be fetched at every start, put the list on a static host and use MEGA for the bigger files, or as the place
+of the one-time full client. *Tested:* the end-to-end script against a local stand-in of MEGA's API (encryption, resume,
+quota); a real public MEGA file was downloaded, decrypted to a valid ZIP and resumed byte-identically (`otp fetch`).
 
 Normal patches are small: `otp publish` writes a `.thor` diff with only what changed (a 4-entry change to a 2.5 GB
 `data.grf` is a 166-byte patch), so a patch site needs little space and little traffic. Whole GRFs are only uploaded with
@@ -114,6 +119,7 @@ Links are converted to direct downloads automatically:
 | Google Drive | `https://drive.google.com/file/d/ID/view`, `…?id=ID`, `gdrive:ID` | `drive.usercontent.google.com/download?id=ID&export=download&confirm=t` |
 | Dropbox | `…?dl=0` | `…?dl=1` |
 | OneDrive | `onedrive.live.com/redir?…` | `…/download?…` |
+| MEGA | `https://mega.nz/file/ID#KEY`, `mega:ID#KEY` | MEGA API (`"a":"g"`) → temporary address, decrypted while downloading |
 | GitHub Releases, S3, R2, own server | direct URL | unchanged |
 
 **Be honest about the limits.** Cloud drives are the fragile option:
@@ -123,8 +129,11 @@ Links are converted to direct downloads automatically:
 * A file you re-upload gets a new link on most drives, so the URL map must be updated after every publish. Google Drive
   keeps the link if you replace the file through *Manage versions*.
 * Big GRFs are never sent whole during normal patching (only `.thor` diffs), which is what keeps cloud quotas workable.
-* The cloud conversion is covered by unit tests of the link rewriting and an end-to-end test with local file links;
-  it has **not** been tested against the live services.
+* MEGA: transfer quota per IP for free accounts; a new upload is a new link.
+* The cloud conversion is covered by unit tests of the link rewriting and an end-to-end test with local file links.
+  MEGA was tested against the live service (a public file, see above). Google Drive, Dropbox and OneDrive have **not**
+  been tested with a live link yet. Check your own links before publishing: `otp fetch --url <link> --out test.bin`
+  downloads one link exactly as the patcher does and prints size and SHA-256 (a page instead of the file is reported).
 
 For anything with more than a few dozen players use a static host.
 

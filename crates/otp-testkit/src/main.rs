@@ -65,7 +65,15 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> R<()> {
 }
 
 fn run(args: &[String]) -> R<()> {
-    let (cmd, rest) = args.split_first().ok_or("usage: otp-testkit build|extract|thor ...")?;
+    let (cmd, rest) = args.split_first().ok_or("usage: otp-testkit build|extract|thor|mega-encrypt ...")?;
+    if cmd == "mega-encrypt" {
+        // mega-encrypt <mega file link> <plain file> <encrypted out>: what MEGA stores for that link (AES-128-CTR)
+        let [link, src, out] = rest else { return Err("mega-encrypt needs LINK IN OUT".into()) };
+        let l = otp_core::mega::parse(link).map_err(e)?;
+        let mut data = std::fs::read(src).map_err(e)?;
+        otp_core::mega::Decryptor::new(&l).apply(0, &mut data);
+        return std::fs::write(out, data).map_err(e);
+    }
     let o = parse(rest)?;
     let ctl = Control::default();
     match cmd.as_str() {

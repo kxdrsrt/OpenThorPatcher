@@ -2,6 +2,7 @@
 //!
 //! Supported: Google Drive (`drive.google.com/file/d/ID/...`, `...?id=ID`, `gdrive:ID`), Dropbox (`dl=0` → `dl=1`),
 //! OneDrive (`onedrive.live.com`). A link that returns a web page instead of the file is reported by the downloader.
+//! MEGA file links are not rewritten here: they need MEGA's API and decryption ([`crate::mega`]).
 
 fn drive_id(url: &str) -> Option<String> {
     if let Some(id) = url.strip_prefix("gdrive:") {
@@ -72,7 +73,7 @@ pub fn resolve(url: &str) -> String {
 
 /// Is `s` a full link (not relative to a mirror)?
 pub fn is_absolute(s: &str) -> bool {
-    s.starts_with("http://") || s.starts_with("https://") || s.starts_with("file://") || s.starts_with("gdrive:") || s.starts_with("gh:") || s.starts_with("gl:")
+    s.starts_with("http://") || s.starts_with("https://") || s.starts_with("file://") || s.starts_with("gdrive:") || s.starts_with("gh:") || s.starts_with("gl:") || s.starts_with("mega:")
 }
 
 #[cfg(test)]

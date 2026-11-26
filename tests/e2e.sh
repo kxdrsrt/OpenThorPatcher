@@ -232,6 +232,114 @@ cmp "$M/a.cfg" "$P3/a.cfg" || fail "a damaged file was accepted"
 grep -q "trying the next source" "$D/p4.log" || { cat "$D/p4.log"; fail "the fallback was not announced"; }
 ok "damaged file on one source: rejected by SHA-256, the next source delivers the master version"
 
+# ---- parallel downloads and the bandwidth limit -------------------------------------------------------------------------
+D="$W/parallel"; M="$D/m"; S="$D/site"; P="$D/p"; P1="$D/p1"; mkdir -p "$M" "$P" "$P1"
+i=1; while [ $i -le 12 ]; do head -c 65536 /dev/urandom > "$M/f$i.bin"; i=$((i+1)); done
+SYNC=$(i=1; while [ $i -le 12 ]; do printf '"f%s.bin",' $i; i=$((i+1)); done | sed 's/,$//')
+cat > "$D/project.json" <<EOF
+{"server":"ParRO","client":"$M","site":"$S","base_urls":["file://$S"],"sync":[$SYNC]}
+EOF
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "parallel publish"
+"$OTP" patch --url "file://$S" --client "$P" --parallel 6 > "$D/p.log" 2>&1 || { cat "$D/p.log"; fail "parallel patch"; }
+i=1; while [ $i -le 12 ]; do cmp "$M/f$i.bin" "$P/f$i.bin" || fail "parallel: f$i.bin differs"; i=$((i+1)); done
+"$OTP" patch --url "file://$S" --client "$P1" --parallel 1 > /dev/null 2>&1 || fail "serial patch"
+ok "parallel downloads: 12 files with 6 at a time, all equal to the master (also one at a time)"
+PORT=$((20000 + ($$ + 7) % 20000))
+python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$S" > /dev/null 2>&1 & SRV=$!
+sleep 1
+P2="$D/p2"; mkdir -p "$P2"
+T0=$(date +%s)
+"$OTP" patch --url "http://127.0.0.1:$PORT" --client "$P2" --parallel 4 --max-kbps 256 > "$D/p2.log" 2>&1 || { kill $SRV; cat "$D/p2.log"; fail "rate limited patch"; }
+T1=$(date +%s); kill $SRV
+cmp "$M/f12.bin" "$P2/f12.bin" || fail "rate limited download differs"
+# 768 KiB at 256 KiB/s for all downloads together: at least ~2 s (the first second is the bucket)
+[ $((T1 - T0)) -ge 2 ] || fail "bandwidth limit not applied ($((T1 - T0)) s for 768 KiB at 256 KiB/s)"
+ok "bandwidth limit: 768 KiB over http at 256 KiB/s with 4 downloads took $((T1 - T0)) s"
+
+# ---- MEGA file links (a local stand-in for MEGA's API and storage, AES-128-CTR as MEGA) ----------------------------------
+D="$W/mega"; M="$D/m"; S="$D/site"; P="$D/p"; MS="$D/mega"; mkdir -p "$M" "$P" "$MS"
+head -c 300000 /dev/urandom > "$M/big.bin"; echo "mega cfg" > "$M/a.cfg"
+KEY="AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+KEY2="HxwdHh8QERITFBUWFxgZGhsAAQIDBAUGBwgJCgsMDQ4"
+cat > "$D/project.json" <<EOF
+{"server":"MegaRO","client":"$M","site":"$S","base_urls":[],"sync":["big.bin","a.cfg"],
+ "url_map":{"files/big.bin":"https://mega.nz/file/bigfile#$KEY","files/a.cfg":"mega:cfgfile#$KEY2"}}
+EOF
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "mega publish"
+"$TK" mega-encrypt "https://mega.nz/file/bigfile#$KEY" "$M/big.bin" "$MS/bigfile.enc" || fail "mega encrypt"
+"$TK" mega-encrypt "mega:cfgfile#$KEY2" "$M/a.cfg" "$MS/cfgfile.enc" || fail "mega encrypt 2"
+cmp -s "$M/big.bin" "$MS/bigfile.enc" && fail "mega stand-in stores plain bytes"
+PORT=$((20000 + ($$ + 11) % 20000))
+python3 "$(dirname "$0")/mega_mock.py" "$PORT" "$MS" & MSRV=$!
+sleep 1
+OTP_MEGA_API="http://127.0.0.1:$PORT" "$OTP" patch --url "file://$S" --client "$P" > "$D/p.log" 2>&1 || { kill $MSRV; cat "$D/p.log"; fail "mega patch"; }
+cmp "$M/big.bin" "$P/big.bin" || { kill $MSRV; fail "mega: decrypted file differs from the master"; }
+cmp "$M/a.cfg" "$P/a.cfg" || { kill $MSRV; fail "mega: short link file differs"; }
+ok "MEGA: file links (mega.nz/file/... and mega:...) resolved through the API, decrypted, equal to the master"
+# resume: a partial download continues with MEGA's /start-end suffix
+echo "changed" >> "$M/big.bin"
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "mega publish 2"
+"$TK" mega-encrypt "https://mega.nz/file/bigfile#$KEY" "$M/big.bin" "$MS/bigfile.enc"
+mkdir -p "$P/_patch/dl"; head -c 100000 "$M/big.bin" > "$P/_patch/dl/big.bin.part"
+: > "$MS/hits.log"
+OTP_MEGA_API="http://127.0.0.1:$PORT" "$OTP" patch --url "file://$S" --client "$P" > "$D/p2.log" 2>&1 || { kill $MSRV; cat "$D/p2.log"; fail "mega resume"; }
+cmp "$M/big.bin" "$P/big.bin" || { kill $MSRV; fail "mega: resumed file differs"; }
+grep -q "get bigfile 200008" "$MS/hits.log" || { kill $MSRV; cat "$MS/hits.log"; fail "mega: download did not resume at byte 100000"; }
+ok "MEGA: an interrupted download resumes mid-file and decrypts correctly"
+# quota: a clear message
+sed -e 's#mega:cfgfile#mega:quota#' -e "s#\"site\":\"$S\"#\"site\":\"$D/sq\"#" "$D/project.json" > "$D/pq.json"
+echo "q" >> "$M/a.cfg"
+"$OTP" publish --project "$D/pq.json" > /dev/null || fail "mega quota publish"
+if OTP_MEGA_API="http://127.0.0.1:$PORT" "$OTP" patch --url "file://$D/sq" --client "$D/pq" > "$D/p3.log" 2>&1; then kill $MSRV; fail "mega quota accepted"; fi
+kill $MSRV
+grep -q "transfer quota" "$D/p3.log" || { cat "$D/p3.log"; fail "no clear message for the MEGA quota"; }
+ok "MEGA: an exhausted transfer quota is reported clearly"
+
+# ---- self-update: the signed list offers a newer patcher, which replaces the program ----------------------------------
+D="$W/selfupdate"; M="$D/m"; S="$D/site"; mkdir -p "$M" "$D/inst"
+echo cfg > "$M/a.cfg"
+printf 'new patcher build 0.9.0\n' > "$D/new-patcher"
+"$OTP" keygen --out "$D/keys" > /dev/null
+cat > "$D/project.json" <<EOF
+{"server":"UpdRO","client":"$M","site":"$S","base_urls":["file://$S"],"sync":["a.cfg"],"signing_seed":"$D/keys/signing.seed",
+ "patcher":{"version":"0.9.0","files":{"test-platform":"$D/new-patcher"},"notes":"faster downloads"}}
+EOF
+"$OTP" publish --project "$D/project.json" > "$D/pub.log" || { cat "$D/pub.log"; fail "self-update publish"; }
+[ -f "$S/patcher/test-platform/new-patcher" ] || fail "self-update: program not in the site"
+printf 'old patcher 0.1.0\n' > "$D/inst/openthor-patcher"
+"$OTP" self-update --url "file://$S" --pub "$D/keys/patcher.pub" --exe "$D/inst/openthor-patcher" --current 0.1.0 --platform test-platform > "$D/u.log" 2>&1 || { cat "$D/u.log"; fail "self-update"; }
+cmp "$D/new-patcher" "$D/inst/openthor-patcher" || fail "self-update: program not replaced"
+grep -q "old patcher" "$D/inst/openthor-patcher.old" || fail "self-update: old program not kept as .old"
+"$OTP" self-update --url "file://$S" --pub "$D/keys/patcher.pub" --exe "$D/inst/openthor-patcher" --current 0.9.0 --platform test-platform | grep -q "no newer patcher" || fail "self-update: same version updated again"
+printf 'old patcher 0.1.0\n' > "$D/inst/openthor-patcher"
+echo "evil" > "$S/patcher/test-platform/new-patcher"
+if "$OTP" self-update --url "file://$S" --pub "$D/keys/patcher.pub" --exe "$D/inst/openthor-patcher" --current 0.1.0 --platform test-platform > "$D/u2.log" 2>&1; then fail "self-update accepted a tampered program"; fi
+grep -q "old patcher" "$D/inst/openthor-patcher" || fail "self-update: a refused update changed the program"
+ok "self-update: newer signed build replaces the program (old kept as .old), same version is left alone, a tampered build is refused"
+
+# ---- MidgardCP: news from the panel's API into the signed list, status URL ----------------------------------------------
+D="$W/midgard"; M="$D/m"; S="$D/site"; mkdir -p "$M" "$D/cp/api/v1"
+echo cfg > "$M/a.cfg"
+cat > "$D/cp/api/v1/news.json" <<'EOF'
+{"total":1,"items":[{"id":7,"title":"WoE this Sunday","html":"<p>Castles: <strong>Prontera</strong> &amp; Payon</p><ul><li>19:00</li><li>20:00</li></ul>","realm":null,"pinned":true,"published_at":"2026-11-26T09:00:00Z"}]}
+EOF
+cat > "$D/project.json" <<EOF
+{"server":"CpRO","client":"$M","site":"$S","base_urls":["file://$S"],"sync":["a.cfg"],
+ "news_from":"file://$D/cp/api/v1/news.json","status_url":"https://cp.example/api/v1/status","status_realm":"hr",
+ "news":[{"date":"2000-01-01","title":"old hand-written news"}]}
+EOF
+"$OTP" publish --project "$D/project.json" > "$D/pub.log" || { cat "$D/pub.log"; fail "midgard publish"; }
+grep -q '"title": "WoE this Sunday"' "$S/patchlist.json" || fail "midgard: panel news not in the list"
+grep -q 'Castles: \*\*Prontera\*\* & Payon' "$S/patchlist.json" || { grep -A3 WoE "$S/patchlist.json"; fail "midgard: html not turned into patcher markup"; }
+grep -q '"status_realm": "hr"' "$S/patchlist.json" || fail "midgard: status realm missing"
+grep -q "old hand-written" "$S/patchlist.json" && fail "midgard: hand-written news not replaced"
+mv "$D/cp" "$D/cp-down"
+"$OTP" publish --project "$D/project.json" > "$D/pub2.log" || { cat "$D/pub2.log"; fail "midgard publish with the panel down"; }
+grep -q "the news of the last publish stay" "$D/pub2.log" || fail "midgard: no warning when the panel is down"
+grep -q '"title": "WoE this Sunday"' "$S/patchlist.json" || fail "midgard: news lost while the panel was down"
+"$OTP" news --from "file://$D/cp-down/api/v1/news.json" | grep -q "2026-11-26 WoE this Sunday" || fail "otp news preview"
+ok "MidgardCP: news from the panel API (html → patcher markup), kept when the panel is down; status URL in the list"
+
 # OdinGuard hook: after a publish the master GRFs go into the OdinGuard profile and grf-manifest.json into the site.
 # A stand-in `og` records its arguments (OG=/path/to/og runs the real program against a throw-away profile instead).
 D="$W/odinguard"; M="$D/master"; S="$D/site"

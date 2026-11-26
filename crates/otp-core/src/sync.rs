@@ -14,6 +14,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use sha2::{Digest, Sha256};
 
+/// Downloads at the same time unless the player or `patcher.json` says otherwise.
+pub const DEFAULT_PARALLEL: usize = 4;
+
 #[derive(Clone)]
 pub struct Config {
     /// Folder URL of the patch site (`http(s)://`, `file://`), without the file name.
@@ -46,6 +49,10 @@ pub struct Config {
     pub fallback_urls: Vec<String>,
     /// An explicit HTTP(S) or SOCKS5 proxy; without one the system settings apply.
     pub proxy: Option<String>,
+    /// Files downloaded at the same time (1 = one after another). Patches are still applied in order.
+    pub parallel: usize,
+    /// Bandwidth limit for all downloads together in KiB/s; 0 = no limit.
+    pub max_kbps: u64,
 }
 
 impl Config {
@@ -67,6 +74,8 @@ impl Config {
             header_hosts: vec![],
             fallback_urls: vec![],
             proxy: None,
+            parallel: DEFAULT_PARALLEL,
+            max_kbps: 0,
         }
     }
 
@@ -82,6 +91,7 @@ impl Config {
         }
         crate::fetch::set_auth(crate::fetch::Auth { headers: self.headers.clone(), hosts });
         crate::fetch::set_proxy(self.proxy.clone());
+        crate::fetch::set_rate_limit(self.max_kbps.saturating_mul(1024));
     }
 
     fn cancelled(&self) -> bool {
@@ -101,6 +111,8 @@ impl Config {
 pub enum Event {
     Info(String),
     Download { name: String, done: u64, total: u64 },
+    /// All downloads of the current step together (several run at the same time).
+    Total { done: u64, total: u64 },
     Applied { target: String, id: u32 },
     Removed(String),
 }
@@ -282,7 +294,7 @@ fn norm_base(b: &str) -> String {
 /// from is asked first; a source that does not answer (connection refused, timeout) is skipped for the rest of the run so a
 /// dead one does not cost its timeout again for every file; a file that fails the SHA-256 check is thrown away and the
 /// next source tried.
-fn get(cfg: &Config, list: &PatchList, rel: &str, dest: &Path, size: u64, sha: &str, ev: &mut dyn FnMut(Event)) -> Result<()> {
+pub(crate) fn get(cfg: &Config, list: &PatchList, rel: &str, dest: &Path, size: u64, sha: &str, ev: &mut dyn FnMut(Event)) -> Result<()> {
     let mut bases: Vec<String> = if is_absolute(rel) {
         vec![String::new()]
     } else {
@@ -339,6 +351,88 @@ fn get_file(cfg: &Config, list: &PatchList, f: &FileEntry, dest: &Path, ev: &mut
     get(cfg, list, &rel, dest, f.size, &f.sha256, ev)
 }
 
+/// One download of a step: site-relative path or full link, destination, size and SHA-256 from the list.
+struct Job {
+    rel: String,
+    dest: PathBuf,
+    size: u64,
+    sha: String,
+}
+
+enum Msg {
+    Ev(Event),
+    Done(Result<()>),
+}
+
+/// Downloads every job with up to `cfg.parallel` at the same time. A destination that already holds the right file (an
+/// earlier run stopped after its download) is not fetched again. Progress of every file is passed on, plus a `Total`
+/// event for all of them. The first error stops new downloads and is returned once the running ones have ended.
+fn fetch_all(cfg: &Config, list: &PatchList, jobs: Vec<Job>, ev: &mut dyn FnMut(Event)) -> Result<()> {
+    let jobs: Vec<Job> = jobs
+        .into_iter()
+        .filter(|j| !(j.dest.is_file() && !j.sha.is_empty() && sha256_file(&j.dest).is_ok_and(|h| h.eq_ignore_ascii_case(&j.sha))))
+        .collect();
+    if jobs.is_empty() {
+        return Ok(());
+    }
+    let total: u64 = jobs.iter().map(|j| j.size).sum();
+    let workers = cfg.parallel.clamp(1, 16).min(jobs.len());
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+    let (tx, rx) = std::sync::mpsc::channel::<Msg>();
+    let mut first: Option<Error> = None;
+    let mut done_by: BTreeMap<String, u64> = BTreeMap::new();
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            let tx = tx.clone();
+            let (jobs, next, stop) = (&jobs, &next, &stop);
+            s.spawn(move || loop {
+                let i = next.fetch_add(1, Ordering::SeqCst);
+                if i >= jobs.len() || stop.load(Ordering::SeqCst) || cfg.cancelled() {
+                    break;
+                }
+                let j = &jobs[i];
+                let r = get(cfg, list, &j.rel, &j.dest, j.size, &j.sha, &mut |e| {
+                    let _ = tx.send(Msg::Ev(e));
+                });
+                if r.is_err() {
+                    stop.store(true, Ordering::SeqCst);
+                }
+                let _ = tx.send(Msg::Done(r));
+            });
+        }
+        drop(tx);
+        for m in rx {
+            match m {
+                Msg::Ev(e) => {
+                    if let Event::Download { name, done, .. } = &e {
+                        done_by.insert(name.clone(), *done);
+                        let sum: u64 = done_by.values().sum();
+                        ev(e);
+                        ev(Event::Total { done: sum.min(total.max(sum)), total });
+                    } else {
+                        ev(e);
+                    }
+                }
+                Msg::Done(Err(e)) => {
+                    if first.is_none() || matches!(first, Some(Error::Cancelled)) {
+                        first = Some(e);
+                    }
+                }
+                Msg::Done(Ok(())) => {}
+            }
+        }
+    });
+    if let Some(e) = first {
+        return Err(e);
+    }
+    cfg.check_cancel()
+}
+
+fn file_job(f: &FileEntry, dest: PathBuf) -> Job {
+    Job { rel: if f.url.is_empty() { format!("files/{}", f.path) } else { f.url.clone() }, dest, size: f.size, sha: f.sha256.clone() }
+}
+
 fn remove_paths(cfg: &Config, list: &PatchList, sum: &mut Summary, ev: &mut dyn FnMut(Event)) -> Result<()> {
     for r in &list.remove {
         let (base, folder) = match r.strip_suffix("/*").or_else(|| r.strip_suffix("\\*")) {
@@ -391,6 +485,7 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
     let dl = patch_dir(&cfg.client_dir).join("dl");
     let key_for = |name: &str| GrfKey::from_password(cfg.grf_passwords.get(name).map(|s| s.as_str()));
 
+    let mut stale: Vec<&FileEntry> = Vec::new();
     for f in &list.files {
         cfg.check_cancel()?;
         let rel = safe_rel(&f.path)?;
@@ -401,17 +496,21 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
         }
         ev(Event::Info(format!("update {}", f.path)));
         sum.files_updated.push(f.path.clone());
-        if cfg.dry_run {
-            continue;
+        stale.push(f);
+    }
+    if !cfg.dry_run && !stale.is_empty() {
+        let jobs = stale.iter().map(|f| Ok(file_job(f, dl.join(safe_rel(&f.path)?)))).collect::<Result<Vec<_>>>()?;
+        fetch_all(cfg, &list, jobs, ev)?;
+        for f in &stale {
+            let rel = safe_rel(&f.path)?;
+            let local = cfg.client_dir.join(&rel);
+            if let Some(d) = local.parent() {
+                std::fs::create_dir_all(d).map_err(|e| io_err(d, e))?;
+            }
+            swap(&local, &dl.join(&rel), false)?;
+            st.hashes.remove(&format!("file:{}", f.path));
+            save_state(&cfg.client_dir, &st)?;
         }
-        let tmp = dl.join(&rel);
-        get_file(cfg, &list, f, &tmp, ev)?;
-        if let Some(d) = local.parent() {
-            std::fs::create_dir_all(d).map_err(|e| io_err(d, e))?;
-        }
-        swap(&local, &tmp, false)?;
-        st.hashes.remove(&format!("file:{}", f.path));
-        save_state(&cfg.client_dir, &st)?;
     }
 
     remove_paths(cfg, &list, &mut sum, ev)?;
@@ -455,6 +554,14 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
         };
         let mut todo: Vec<_> = list.patches.iter().filter(|p| &p.target == name && p.id > id).collect();
         todo.sort_by_key(|p| p.id);
+        if !cfg.dry_run && !todo.is_empty() {
+            // every patch of this GRF is downloaded first (several at a time), then they are applied in order
+            let jobs = todo
+                .iter()
+                .map(|p| Ok(Job { rel: if p.url.is_empty() { p.file.clone() } else { p.url.clone() }, dest: dl.join(safe_rel(&p.file)?), size: p.size, sha: p.sha256.clone() }))
+                .collect::<Result<Vec<_>>>()?;
+            fetch_all(cfg, &list, jobs, ev)?;
+        }
         for p in todo {
             cfg.check_cancel()?;
             ev(Event::Info(format!("patch {} for {name}", p.id)));
@@ -463,8 +570,6 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
                 continue;
             }
             let tmp = dl.join(safe_rel(&p.file)?);
-            let rel = if p.url.is_empty() { p.file.clone() } else { p.url.clone() };
-            get(cfg, &list, &rel, &tmp, p.size, &p.sha256, ev)?;
             apply_thor(&grf, &tmp, &key, cfg.backup)?;
             let _ = std::fs::remove_file(&tmp);
             st.hashes.remove(&format!("grf:{name}"));

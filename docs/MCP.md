@@ -15,12 +15,13 @@ Transport: stdio, newline-delimited JSON-RPC 2.0, tools only. `OTP_MCP_READONLY=
 | `otp_scan_client` | – | Files of the master client with a suggestion (thor / sync / ignore) |
 | `otp_project_get` | – | Reads `otp-project.json` |
 | `otp_project_create` | yes | New project from a master client folder |
-| `otp_project_update` | yes | Merges fields (mirrors, `remove`, `data_ini`, `url_map`, `game`, maintenance …) |
+| `otp_project_update` | yes | Merges fields (mirrors, `remove`, `data_ini`, `url_map`, `game`, maintenance, `news_from`/`status_url` for MidgardCP, `patcher` self-update …) |
 | `otp_publish_plan` | – | Dry run: new patches with counts, files, removals |
 | `otp_publish` | yes | Writes the site |
 | `otp_site_files` | – | Files to upload with their cloud links |
 | `otp_patch_check` | – | What a client folder still needs |
-| `otp_patch` | yes | Updates a client folder |
+| `otp_patch` | yes | Updates a client folder (`parallel`, `max_kbps`) |
+| `otp_news_preview` | – | News a web panel (MidgardCP `/api/v1/news`) would put into the patch list |
 | `otp_keygen` | yes | Key pair; refuses to overwrite |
 
 **Safety.** Every writing tool needs `confirm: true`, which the assistant should only send after you agreed. Secrets

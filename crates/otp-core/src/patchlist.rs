@@ -68,6 +68,26 @@ pub struct PatchList {
     /// Changelog shown in the patcher's Changelog tab (newest first).
     #[serde(default)]
     pub changelog: Vec<ChangeEntry>,
+    /// Newest patcher program; a patcher with an older version replaces itself before it patches (only with a signed
+    /// list).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patcher: Option<PatcherRelease>,
+    /// JSON status of a web panel (MidgardCP `/api/v1/status`): the patcher shows the realm's state and players online.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub status_url: String,
+    /// Realm id in that status (default: the first realm).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub status_realm: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct PatcherRelease {
+    /// `major.minor.patch`
+    pub version: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+    /// Platform (`windows-x64`, `macos-arm64`, `linux-x64`) → the program file.
+    pub files: BTreeMap<String, FileEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -83,7 +103,7 @@ pub struct LinkItem {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct NewsItem {
     /// Free text, usually `YYYY-MM-DD`.
     #[serde(default)]
@@ -143,7 +163,7 @@ pub struct Pack {
     pub locked: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FileEntry {
     /// Path inside the client folder, `/` separated.
     pub path: String,

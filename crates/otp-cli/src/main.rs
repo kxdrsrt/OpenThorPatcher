@@ -90,6 +90,42 @@ enum Cmd {
         /// GRF a classic Thor patch without a target goes to
         #[arg(long, default_value = "data.grf")]
         legacy_grf: String,
+        /// Files downloaded at the same time
+        #[arg(long, default_value_t = otp_core::sync::DEFAULT_PARALLEL)]
+        parallel: usize,
+        /// Bandwidth limit for all downloads together in KiB/s (0 = none)
+        #[arg(long, default_value_t = 0)]
+        max_kbps: u64,
+    },
+    /// Replace a patcher program with the newer build a signed patch list offers (what the patcher does at start)
+    SelfUpdate {
+        #[arg(long)]
+        url: String,
+        #[arg(long = "pub")]
+        pub_key: PathBuf,
+        /// The program file to replace
+        #[arg(long)]
+        exe: PathBuf,
+        /// Its version
+        #[arg(long)]
+        current: String,
+        /// Platform key in the patch list (default: this computer's)
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long = "fallback-url")]
+        fallback_url: Vec<String>,
+    },
+    /// Download one link the way the patcher does (MEGA, Google Drive, Dropbox, OneDrive, http): check a cloud link
+    Fetch {
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Show the news a web panel (MidgardCP /api/v1/news) would put into the patch list
+    News {
+        #[arg(long)]
+        from: String,
     },
     /// Switch an optional pack on or off for this client and rewrite DATA.INI
     Pack {
@@ -173,7 +209,7 @@ fn real() -> otp_core::Result<()> {
                 );
             }
         }
-        Cmd::Patch { url, client, pub_key, grf_password, keep_backup, dry_run, check, header, header_host, fallback_url, proxy, legacy_grf } => {
+        Cmd::Patch { url, client, pub_key, grf_password, keep_backup, dry_run, check, header, header_host, fallback_url, proxy, legacy_grf, parallel, max_kbps } => {
             let mut cfg = Config::new(url, client);
             for s in grf_password {
                 let (n, p) = s.split_once('=').ok_or_else(|| otp_core::msg("--grf-password needs name=password"))?;
@@ -191,15 +227,19 @@ fn real() -> otp_core::Result<()> {
             cfg.dry_run = dry_run;
             cfg.force_check = check;
             cfg.legacy_default_grf = legacy_grf;
-            let mut last = 0u64;
+            cfg.parallel = parallel;
+            cfg.max_kbps = max_kbps;
+            let mut last: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
             let s = run(&cfg, &mut |e| match e {
                 Event::Info(s) => println!("{s}"),
                 Event::Download { name, done, total } => {
-                    if done == total || done.saturating_sub(last) > 8 << 20 {
+                    let l = last.entry(name.clone()).or_insert(0);
+                    if (done == total && *l != done) || done.saturating_sub(*l) > 8 << 20 {
                         println!("  {name}: {}/{}", human(done), human(total));
-                        last = done;
+                        *l = done;
                     }
                 }
+                Event::Total { .. } => {}
                 Event::Applied { target, id } => println!("  {target}: patch {id} applied"),
                 Event::Removed(p) => println!("  removed {p}"),
             })?;
@@ -211,6 +251,39 @@ fn real() -> otp_core::Result<()> {
                 s.removed.len(),
                 if s.data_ini_written { ", DATA.INI updated" } else { "" }
             );
+        }
+        Cmd::SelfUpdate { url, pub_key, exe, current, platform, fallback_url } => {
+            let mut cfg = Config::new(url, exe.parent().map(PathBuf::from).unwrap_or_default());
+            cfg.pub_key = Some(pub_key);
+            cfg.fallback_urls = fallback_url;
+            let list = otp_core::sync::fetch_list(&cfg)?;
+            let platform = platform.unwrap_or_else(|| otp_core::selfupdate::platform().to_string());
+            match otp_core::selfupdate::available(&list, &current, &platform) {
+                None => println!("no newer patcher for {platform} (have {current})"),
+                Some((v, f)) => {
+                    let f = f.clone();
+                    let v = v.to_string();
+                    otp_core::selfupdate::update(&cfg, &list, &f, &exe, &mut |_| {})?;
+                    println!("updated {} from {current} to {v}", exe.display());
+                }
+            }
+        }
+        Cmd::Fetch { url, out } => {
+            let mut last = 0u64;
+            otp_core::fetch::download(&url, &out, 0, "", &mut |done, total| {
+                if done.saturating_sub(last) > 8 << 20 {
+                    println!("  {}/{}", human(done), human(total));
+                    last = done;
+                }
+                true
+            })?;
+            let size = std::fs::metadata(&out).map_err(|e| otp_core::io_err(&out, e))?.len();
+            println!("{}: {} bytes, sha256 {}", out.display(), size, otp_core::sha256_file(&out)?);
+        }
+        Cmd::News { from } => {
+            for n in otp_core::midgard::fetch_news(&from)? {
+                println!("{} {}\n{}\n", n.date, n.title, n.body);
+            }
         }
         Cmd::Pack { url, client, id, on, off } => {
             if !on && !off {

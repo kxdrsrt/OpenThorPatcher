@@ -57,7 +57,7 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "otp_project_update",
         title: "Change a project",
-        description: "Merges the given fields into the project file. Allowed keys: server, base_urls, thor, sync, remove, signing_seed, full, news_url, notice, game {exe,args,setup_exe}, website, links [{title,url}], servers [{name,host,port}], git_push, news [{date,title,body}], changelog [{date,version,title,items[]}], data_ini {order,packs[{id,file,title,default,locked}]}, url_map {site path: full link}, allow_patching, message.",
+        description: "Merges the given fields into the project file. Allowed keys: server, base_urls, thor, sync, remove, signing_seed, full, news_url, notice, game {exe,args,setup_exe}, website, links [{title,url}], servers [{name,host,port}], git_push, news [{date,title,body}], changelog [{date,version,title,items[]}], data_ini {order,packs[{id,file,title,default,locked}]}, url_map {site path: full link}, allow_patching, message, news_from (web panel news URL, e.g. MidgardCP /api/v1/news?realm=hr), status_url + status_realm (MidgardCP /api/v1/status), patcher {version, files {windows-x64: path}, notes} (self-update).",
         writes: true,
         params: &[
             ("project", "string", "Path of otp-project.json", true),
@@ -113,8 +113,17 @@ const TOOLS: &[Tool] = &[
             ("url", "string", "Folder URL of the patch site", true),
             ("client", "string", "Client folder", true),
             ("pub_key", "string", "Public key file (patcher.pub)", false),
+            ("parallel", "integer", "Files downloaded at the same time (default 4)", false),
+            ("max_kbps", "integer", "Bandwidth limit in KiB/s (default none)", false),
             ("confirm", "boolean", "Must be true", true),
         ],
+    },
+    Tool {
+        name: "otp_news_preview",
+        title: "Preview news from a web panel",
+        description: "Reads news from a web panel URL (MidgardCP /api/v1/news?realm=<id>) as the patch list would carry them (project field news_from).",
+        writes: false,
+        params: &[("url", "string", "News URL of the panel", true)],
     },
     Tool {
         name: "otp_keygen",
@@ -198,6 +207,7 @@ fn call(name: &str, a: &Value) -> Result<Value, String> {
             const ALLOWED: &[&str] = &[
                 "server", "base_urls", "thor", "sync", "remove", "signing_seed", "full", "news_url", "notice", "game", "data_ini", "url_map",
                 "allow_patching", "message", "news", "changelog", "website", "links", "servers", "git_push",
+                "news_from", "status_url", "status_realm", "patcher", "url_map",
             ];
             for (k, val) in ch {
                 if !ALLOWED.contains(&k.as_str()) {
@@ -234,6 +244,12 @@ fn call(name: &str, a: &Value) -> Result<Value, String> {
             let mut cfg = Config::new(need(a, "url")?, PathBuf::from(need(a, "client")?));
             cfg.pub_key = s(a, "pub_key").map(PathBuf::from);
             cfg.dry_run = dry;
+            if let Some(n) = a.get("parallel").and_then(Value::as_u64) {
+                cfg.parallel = n as usize;
+            }
+            if let Some(n) = a.get("max_kbps").and_then(Value::as_u64) {
+                cfg.max_kbps = n;
+            }
             let mut log = vec![];
             let sum = run(&cfg, &mut |ev| {
                 if let otp_core::sync::Event::Info(i) = ev {
@@ -245,6 +261,7 @@ fn call(name: &str, a: &Value) -> Result<Value, String> {
             v["log"] = json!(log);
             Ok(v)
         }
+        "otp_news_preview" => Ok(json!({"news": otp_core::midgard::fetch_news(&need(a, "url")?).map_err(e)?})),
         "otp_keygen" => {
             confirmed(a)?;
             let out = PathBuf::from(need(a, "out")?);

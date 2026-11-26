@@ -8,3 +8,4 @@ publish = false
 
 [dependencies]
 rgrf-core = { path = "../../vendor/rgrf-core" }
+otp-core = { path = "../otp-core" }

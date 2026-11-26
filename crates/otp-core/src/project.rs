@@ -70,6 +70,29 @@ pub struct Project {
     /// versions the server accepts) is written to the site.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub odinguard: Option<OdinGuardCfg>,
+    /// News are taken from this web panel URL at every publish (MidgardCP: `https://cp.example/api/v1/news?realm=hr&limit=10`)
+    /// instead of `news`. When the panel cannot be reached the news of the last publish stay.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub news_from: String,
+    /// JSON status of the panel (MidgardCP `https://cp.example/api/v1/status`) shown by the patcher.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub status_url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub status_realm: String,
+    /// Patcher programs to offer as a self-update (written to `patcher/` of the site).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patcher: Option<PatcherCfg>,
+}
+
+/// The patcher builds that players get through the self-update.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PatcherCfg {
+    /// version of these builds (`0.2.0`); a patcher with an older version replaces itself
+    pub version: String,
+    /// platform (`windows-x64`, `macos-arm64`, ...) → program file on the operator's disk
+    pub files: BTreeMap<String, PathBuf>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -113,6 +136,10 @@ impl Project {
             news: vec![],
             changelog: vec![],
             odinguard: None,
+            news_from: String::new(),
+            status_url: String::new(),
+            status_realm: String::new(),
+            patcher: None,
         }
     }
 
@@ -130,6 +157,11 @@ impl Project {
         fix(&mut p.site);
         if let Some(s) = p.signing_seed.as_mut() {
             fix(s);
+        }
+        if let Some(pc) = p.patcher.as_mut() {
+            for f in pc.files.values_mut() {
+                fix(f);
+            }
         }
         if let Some(o) = p.odinguard.as_mut() {
             fix(&mut o.profile);

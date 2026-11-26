@@ -102,6 +102,13 @@
           <label class="fld wide"><span>OdinGuard profile (.profile.toml)</span><span class="inline"><input id="f-og-profile" placeholder="empty = off"><button class="btn icon pick" data-for="f-og-profile" title="Choose file" aria-label="Choose OdinGuard profile"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
           <label class="fld wide"><span>og program</span><span class="inline"><input id="f-og-bin" placeholder="og (from PATH)"><button class="btn icon pick" data-for="f-og-bin" title="Choose file" aria-label="Choose the og program"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
         </div>
+        <h3>Patcher self-update</h3>
+        <div class="card form">
+          <p class="note wide" style="margin:0">Optional. Players' patchers replace themselves with these builds before they patch (only with a signed list). Raise the version with every new build.</p>
+          <label class="fld"><span>Version</span><input id="u-ver" placeholder="0.2.0"></label>
+          <label class="fld wide"><span>Windows program (openthor-patcher.exe)</span><span class="inline"><input id="u-win" placeholder="empty = no update for Windows"><button class="btn icon pick" data-for="u-win" title="Choose file" aria-label="Choose the Windows patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+          <label class="fld wide"><span>macOS program (Apple silicon)</span><span class="inline"><input id="u-mac" placeholder="empty = no update for macOS"><button class="btn icon pick" data-for="u-mac" title="Choose file" aria-label="Choose the macOS patcher"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+        </div>
       </section>
 
       <section id="tab-files" class="tab needs-project">
@@ -161,6 +168,13 @@
         <div class="card form">
           <label class="fld wide"><span>Server website (the patcher's Website button opens it in the player's browser)</span><input id="w-url" placeholder="https://example.com"></label>
           <label class="fld wide"><span>News page (https, shown inside the patcher as a third tab)</span><input id="n-url2" placeholder="https://example.com/news"></label>
+        </div>
+        <h3>Web panel (MidgardCP)</h3>
+        <div class="card form">
+          <p class="note wide" style="margin:0">Optional. Write news once in the panel: every publish takes them from its API instead of the list above (if the panel cannot be reached, the news of the last publish stay). The status shows the realm's state and players online in the patcher. The panel never signs anything.</p>
+          <label class="fld wide"><span>News from (MidgardCP: <code>https://cp…/api/v1/news?realm=hr&amp;limit=10</code>)</span><input id="cp-news" placeholder="empty = the news above"></label>
+          <label class="fld wide"><span>Status (MidgardCP: <code>https://cp…/api/v1/status</code>)</span><input id="cp-status" placeholder="empty = only the server dots"></label>
+          <label class="fld"><span>Realm id</span><input id="cp-realm" placeholder="hr"></label>
         </div>
         <div id="links-list" class="list" style="margin-top:10px"></div>
         <div class="inline-add"><button id="btn-link-add" class="btn"><svg class="ic"><use href="#i-plus"/></svg>Add link</button><span class="note" style="align-self:center">Discord, forum, vote … shown at the bottom of the patcher</span></div>

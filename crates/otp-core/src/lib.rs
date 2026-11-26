@@ -10,10 +10,13 @@ pub mod apply;
 pub mod dataini;
 pub mod fetch;
 pub mod launch;
+pub mod mega;
+pub mod midgard;
 pub mod patchlist;
 pub mod project;
 pub mod providers;
 pub mod publish;
+pub mod selfupdate;
 pub mod sign;
 pub mod sync;
 

@@ -46,7 +46,7 @@
   <img id="logo" class="logo" src="themes/default/logo.png" alt="OpenThor Patcher" draggable="false" data-tauri-drag-region>
   <div class="frame">
     <header class="bar" data-tauri-drag-region>
-      <div class="who" data-tauri-drag-region><span id="name">OpenThor Patcher</span><i id="sub">Checking for updates…</i><div id="srv" class="srv" aria-label="Server status"></div></div>
+      <div class="who" data-tauri-drag-region><span id="name">OpenThor Patcher</span><i id="sub">Checking for updates…</i><div class="srvrow"><div id="srv" class="srv" aria-label="Server status"></div><span id="online" class="online" hidden></span></div></div>
       <div class="wincontrols">
         <button id="btn-web" class="wbtn pill" hidden title="Open the server's website"><svg class="ic"><use href="#i-globe"/></svg><span>Website</span></button>
         <button id="btn-settings" class="wbtn" title="Settings" aria-label="Settings"><svg class="ic"><use href="#i-gear"/></svg></button>
@@ -98,6 +98,8 @@
         <label class="fld wide"><span>Client folder</span><span class="inline"><input id="s-dir" readonly><button id="s-pick" type="button" class="btn icon" title="Choose folder" aria-label="Choose folder"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
         <label class="switch-row"><span>Update automatically on start</span><span class="switch"><input type="checkbox" id="s-auto"><i></i></span></label>
         <label class="switch-row"><span>Keep the old GRF as .bak after an update<small>off by default: the old file is replaced completely</small></span><span class="switch"><input type="checkbox" id="s-bak"><i></i></span></label>
+        <label class="fld"><span>Downloads at the same time</span><input id="s-par" type="number" min="1" max="16" step="1"></label>
+        <label class="fld"><span>Speed limit (KB/s, 0 = none)</span><input id="s-kbps" type="number" min="0" step="100"></label>
       </div>
       <h3 id="packs-title">Options</h3>
       <div id="packs" class="card form"></div>

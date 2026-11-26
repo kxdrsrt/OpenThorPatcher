@@ -28,7 +28,7 @@
 
 ## Status: pre-release, not production-ready yet
 
-**v0.1.0 is a pre-release.** The core, the CLI, the MCP server and both apps work and are tested (unit tests, the
+**v0.2.0 is a pre-release.** The core, the CLI, the MCP server and both apps work and are tested (unit tests, the
 end-to-end script `tests/e2e.sh` with plain and encrypted GRFs, a tampered patch list, a broken download, file removal and
 the classic `plist.txt` layout, and a run against a real 2.5 GB `data.grf`). It is **not** a stable production version:
 
@@ -36,10 +36,11 @@ the classic `plist.txt` layout, and a run against a real 2.5 GB `data.grf`). It 
   local test server, the user interface logic was tested with a scripted DOM.
 * **Not tested on a real player PC:** slow connections, antivirus scanners and locked files are unknown territory.
 * **The `.exe` files are not code-signed**, so Windows SmartScreen shows "unknown publisher".
-* **No self-update and no installer:** a new version goes into your client package.
+* **No installer:** the first patcher goes into your client package; from then on it **updates itself** (0.2.0).
 * **Cloud links** (Google Drive, Dropbox, OneDrive) and **private GitHub/GitLab repositories** are only tested with local
-  stand-ins, not against the real services.
-* Planned, not there yet: the OdinGuard hook (M6), installers and self-update (M7), parallel downloads (M8).
+  stand-ins; **MEGA** was also tested against the live service. Check every link with `otp fetch`.
+* Done since 0.1.0: the OdinGuard hook (M6), signed self-update (M7), parallel downloads and a bandwidth limit (M8),
+  MEGA links, MidgardCP news and online count (M9). Planned: installers, languages, binary deltas.
 
 A stable **v1.0** needs a test on real player machines and signed binaries. Details and the full list:
 [docs/ROADMAP.md](docs/ROADMAP.md).
@@ -95,11 +96,14 @@ swapped in; the old file is **replaced completely**, a `.bak` only stays with `-
 - **Still `.thor`:** reads every Thor patch and the classic `plist.txt` server layout, so an existing patch server works
   unchanged (merge patches and loose-file patches).
 - **Several sources, one master version:** the patch list is read from every source you give, the newest valid one wins, a stale or dead mirror changes nothing, a client never rolls back, every file is checked by SHA-256 (see [docs/HOSTING.md](docs/HOSTING.md)).
-- **Hosting freedom:** static host, S3/R2, GitHub Releases, **GitHub / GitLab repositories** (`gh:owner/repo@main`, `gl:group/project@main`, private ones with a read-only token), or Google Drive / Dropbox / OneDrive share links. See [docs/HOSTING.md](docs/HOSTING.md).
+- **Hosting freedom:** static host, S3/R2, GitHub Releases, **GitHub / GitLab repositories** (`gh:owner/repo@main`, `gl:group/project@main`, private ones with a read-only token), Google Drive / Dropbox / OneDrive share links or **MEGA file links** (decrypted on the fly, resumable). See [docs/HOSTING.md](docs/HOSTING.md).
+- **Fast and polite:** up to 4 downloads at the same time (configurable) and an optional bandwidth limit for all of them together.
+- **Self-update:** the signed patch list can offer a newer patcher; it replaces itself before patching (SHA-256 checked, never loops on a wrong build).
+- **MidgardCP:** news written once in the web panel arrive in the signed patch list at every publish; the patcher shows the realm's players online.
 - **Player window:** Website button, link buttons with icons (Discord, forum, GitHub …), login/char/map server status dots, a big Play button and **RO Setup**.
 - **Themes, news and changelog:** the player window is a themeable folder (default: a Ragnarok-style night-blue theme with the logo sticking out of the window); news and changelog are written in the Patch Maker and travel in the signed patch list.
 - **Optional packs** (for example OdinGuard's competitive pack) with a per-player switch that survives patching.
-- **Scriptable and AI-ready:** CLI with `--json`, and the `otp-mcp` MCP server (10 tools: create the project, preview, publish, write news, set servers and links) so an assistant can run your patch site; see [docs/MCP.md](docs/MCP.md).
+- **Scriptable and AI-ready:** CLI with `--json`, and the `otp-mcp` MCP server (11 tools: create the project, preview, publish, write news, set servers and links) so an assistant can run your patch site; see [docs/MCP.md](docs/MCP.md).
 
 ## Download
 

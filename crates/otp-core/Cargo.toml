@@ -15,3 +15,5 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 thiserror = "2"
+aes = "0.8"
+base64 = "0.22"

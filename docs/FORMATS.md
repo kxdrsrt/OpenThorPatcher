@@ -47,7 +47,13 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "data_ini": {
     "order": ["odin.grf", "@pack:competitive", "cdata.grf", "core.grf", "data.grf"],
     "packs": [{ "id": "competitive", "file": "odin-dark.grf", "title": "Competitive visuals", "default": true, "locked": false }]
-  }
+  },
+  "patcher": {
+    "version": "0.2.0", "notes": "faster downloads",
+    "files": { "windows-x64": { "path": "windows-x64/openthor-patcher.exe", "size": 14050304, "sha256": "…", "url": "patcher/windows-x64/openthor-patcher.exe" } }
+  },
+  "status_url": "https://cp.example/api/v1/status",
+  "status_realm": "hr"
 }
 ```
 
@@ -62,7 +68,15 @@ gives the GRF load order; `@pack:<id>` is replaced by the pack's file only when 
 `locked`), and GRFs the player added stay after the managed ones. `servers` are TCP-checked by the player app every 30 s (green/red dot, 2.5 s timeout); `website` and `links` become the Website pill and the icon buttons (icon chosen by host name; only http/https are opened). `notice`/`news_url`/`news`/`changelog` fill the patcher's news area (see [THEMES.md](THEMES.md)).
 Unknown fields are ignored, so lists can grow without a new schema number.
 
-Not in schema 1 yet: an `odinguard` hook (manifest check after patching).
+`patcher` (0.2.0) offers a newer patcher program per platform (`windows-x64`, `windows-arm64`, `macos-arm64`,
+`macos-x64`, `linux-x64`): a patcher with a public key and an older version downloads it (SHA-256 checked), renames
+itself to `<name>.old`, puts the new file in its place and restarts with `--updated-to <version>`; the new process deletes
+`.old`. If the restarted program still reports an older version than announced (a wrong build on the site), it does not
+update again and shows a warning instead of looping. `status_url`/`status_realm` (0.2.0) point at a web panel's JSON
+status (MidgardCP `GET /api/v1/status`: `[{id, name, state, players}]`); the patcher shows the realm's players online next
+to the server dots, every 30 s. Since 0.2.0 the patcher downloads up to 4 files at the same time (`parallel` in
+`patcher.json` or the player's settings) and can limit the bandwidth (`max_kbps`, all downloads together); Thor patches
+are still applied in id order after their downloads.
 
 * The file is signed with Ed25519 (`patchlist.json.sig`); the public key ships with the patcher. An unsigned or
   wrongly signed list is refused unless the operator switched signatures off in `config.toml` (development only).
