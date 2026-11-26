@@ -126,8 +126,11 @@ Play installs pending updates first, then starts `client.exe` with a **launch ti
 
 1. The patcher writes `_patch/launch-<token>.ticket` in the client folder (`<token>` = 32 hex characters, content
    `{"token":"<token>","time":<unix seconds>}`) and removes tickets older than 300 s.
-2. It starts the game with the environment variable `OPENTHOR_LAUNCH=<token>` (also through the UAC prompt when the game
-   needs administrator rights).
+2. It starts the game with the environment variable `OPENTHOR_LAUNCH=<token>`. Windows does not pass environment
+   variables through the UAC prompt, so when the game needs administrator rights (most RO clients ask for them in their
+   manifest) the patcher starts an elevated copy of itself (`openthor.exe --otp-elevated-start <dir> <exe> <token> [args]`,
+   one UAC prompt as before), which starts the game with the variable and exits. Since 0.4.2; 0.4.0/0.4.1 lost the
+   variable on that path.
 3. A guard inside the game may require both: the variable is set, the file `_patch/launch-<token>.ticket` exists and is at
    most 300 s old. It should delete the ticket and clear the variable so the token is used once. OdinGuard's `launcher`
    module does exactly this and otherwise offers to start the patcher (`openthor.exe`) instead.
@@ -142,5 +145,7 @@ program file and refuses more ("The game is already running. Only one game windo
 way (a second client folder, a renamed exe) are not counted; a hard limit belongs to the server or the guard (OdinGuard:
 `og_max_windows`). *Tested:* unit test of the ticket and the 8 s guard; Windows 11 VM with BurningRO's client: a direct
 start of `alpha.exe` was refused by OdinGuard's launcher module, Play started the game, a second Play was refused with
-`max_instances: 1`.
+`max_instances: 1`. 0.4.2 measured again with the patcher started normally (not elevated) and BurningRO's
+`alpha.exe` (`requireAdministrator`): `launcher: started by the patcher`, ticket used, the guard connected to the live login
+server.
 

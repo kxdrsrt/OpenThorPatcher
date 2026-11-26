@@ -23,6 +23,40 @@ pub const TICKET_SECS: u64 = 300;
 pub const DEBOUNCE: Duration = Duration::from_secs(8);
 
 static LAST: Mutex<Option<(PathBuf, Instant)>> = Mutex::new(None);
+static HELPER: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Argument of the elevated helper: `<patcher> --otp-elevated-start <dir> <exe> <token> [game args...]`.
+pub const HELPER_ARG: &str = "--otp-elevated-start";
+
+/// Windows does not pass environment variables through the UAC prompt, so a game that needs administrator rights would
+/// lose `OPENTHOR_LAUNCH`. With a helper set (the patcher itself), such a game is started by an elevated copy of the
+/// helper ([`run_elevated_helper`]), which sets the variable and starts the game directly.
+pub fn use_elevated_helper(program: PathBuf) {
+    let _ = HELPER.set(program);
+}
+
+/// The helper part: call it first thing in `main`. Returns true when this process was started as the helper (it has
+/// started the game; the caller should exit).
+pub fn run_elevated_helper(args: &[String]) -> bool {
+    let Some(i) = args.iter().position(|a| a == HELPER_ARG) else { return false };
+    let rest = &args[i + 1..];
+    if rest.len() >= 3 {
+        let (dir, exe, token) = (PathBuf::from(&rest[0]), PathBuf::from(&rest[1]), &rest[2]);
+        let token_ok = token.len() == 32 && token.chars().all(|c| c.is_ascii_hexdigit());
+        if token_ok && exe.starts_with(&dir) && exe.is_file() {
+            let _ = Command::new(&exe).args(&rest[3..]).current_dir(&dir).env(ENV, token).spawn();
+        }
+    }
+    true
+}
+
+/// `"a b"` quoting for a Windows command line (paths with spaces; a trailing backslash would escape the quote).
+fn win_quote(a: &str) -> String {
+    if !a.is_empty() && !a.contains([' ', '\t', '"']) {
+        return a.to_string();
+    }
+    format!("\"{}\"", a.trim_end_matches('\\').replace('"', "\\\""))
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Refused {
@@ -136,13 +170,21 @@ fn spawn(dir: &Path, full: &Path, args: &str, token: Option<&str>) -> Result<()>
     }
     match c.spawn() {
         Ok(_) => Ok(()),
+        Err(e) if cfg!(windows) && e.raw_os_error() == Some(740) && token.is_some() && HELPER.get().is_some() => {
+            let (helper, t) = (HELPER.get().unwrap(), token.unwrap());
+            let mut line = vec![HELPER_ARG.to_string(), win_quote(&dir.to_string_lossy()), win_quote(&full.to_string_lossy()), t.to_string()];
+            line.extend(list.iter().map(|a| win_quote(a)));
+            let ps = format!(
+                "Start-Process -FilePath '{}' -Verb RunAs -ArgumentList '{}'",
+                helper.display().to_string().replace('\'', "''"),
+                line.join(" ").replace('\'', "''")
+            );
+            Command::new("powershell").args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps]).spawn().map(|_| ()).map_err(|e| crate::io_err(full, e))
+        }
         Err(e) if cfg!(windows) && e.raw_os_error() == Some(740) => {
             let quoted = list.iter().map(|a| format!("'{}'", a.replace('\'', "''"))).collect::<Vec<_>>().join(",");
-            // the elevated process inherits the environment of the PowerShell that starts it
+            // no helper: the game starts elevated, but without the launch variable (UAC does not pass it on)
             let mut ps = String::new();
-            if let Some(t) = token {
-                ps.push_str(&format!("$env:{ENV}='{t}'; "));
-            }
             ps.push_str(&format!("Start-Process -FilePath '{}' -WorkingDirectory '{}' -Verb RunAs", full.display(), dir.display()));
             if !quoted.is_empty() {
                 ps.push_str(&format!(" -ArgumentList {quoted}"));
@@ -175,6 +217,21 @@ mod tests {
         let me = std::env::current_exe().unwrap();
         assert!(running(&me) >= 1);
         assert!(matches!(may_start(&me, 1), Err(Refused::Limit(_))));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn elevated_helper_starts_only_a_game_inside_the_folder_with_a_valid_token() {
+        assert_eq!(win_quote("C:\\My Games\\RO\\"), "\"C:\\My Games\\RO\"");
+        assert_eq!(win_quote("-1sak1"), "-1sak1");
+        assert!(!run_elevated_helper(&["openthor.exe".into()]), "a normal start is not the helper");
+        let d = std::env::temp_dir().join(format!("otp-helper-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let outside = std::env::temp_dir().join("otp-helper-outside.bin");
+        let a = |exe: &std::path::Path, tok: &str| vec!["x".to_string(), HELPER_ARG.into(), d.display().to_string(), exe.display().to_string(), tok.into()];
+        // handled (returns true) but nothing is started: exe outside the folder, bad token, missing file
+        assert!(run_elevated_helper(&a(&outside, &"a".repeat(32))));
+        assert!(run_elevated_helper(&a(&d.join("game.exe"), "not-hex")));
         let _ = std::fs::remove_dir_all(&d);
     }
 }

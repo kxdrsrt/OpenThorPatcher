@@ -601,6 +601,13 @@ fn sync_auth(c: &Config) {
 }
 
 pub fn run() {
+    let args: Vec<String> = std::env::args().collect();
+    if otp_core::launch::run_elevated_helper(&args) {
+        return;
+    }
+    if let Ok(me) = std::env::current_exe() {
+        otp_core::launch::use_elevated_helper(me);
+    }
     let state = Arc::new(App { cancel: Arc::new(AtomicBool::new(false)), last: Mutex::new(None), busy: AtomicBool::new(false) });
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
