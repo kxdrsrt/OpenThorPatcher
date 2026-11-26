@@ -503,7 +503,7 @@ $("#btn-keygen").onclick = async () => {
   try {
     const k = await invoke("make_keys", { dir });
     project.signing_seed = k.seed_path; pubHex = k.pub_hex; touch(); renderProject();
-    status("Key pair ready. Back up signing.seed; without it you cannot publish for existing players.");
+    status("Key pair ready. BACK UP signing.seed now (password manager or encrypted archive). Without it you can never publish for your existing players again.");
   } catch (e) { status(String(e), false); }
 };
 document.querySelectorAll(".pick").forEach((b) => b.addEventListener("click", async () => {

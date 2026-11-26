@@ -131,6 +131,21 @@ Players get `patcher.json` next to the patcher, `openthor.exe` in the client fol
 { "name": "MyRO", "patch_url": "https://patch.example.com/", "pub_key": "<contents of patcher.pub>" }
 ```
 
+## Your keys: create them once, back them up
+
+`otp keygen --out keys` (or *Create key pair…* in the Patch Maker) writes two files. **Do it once per server** and never
+again; it refuses to overwrite an existing key.
+
+| File | Is | Goes where |
+|---|---|---|
+| `signing.seed` | the secret signing key | stays on your computer; **back it up** (password manager or an encrypted archive) and never upload or commit it |
+| `patcher.pub` | the public key | into the `patcher.json` you give players (the Patch Maker does this for you) |
+
+Every patch list is signed with `signing.seed`; players' patchers only accept lists that match their `patcher.pub`. If you
+lose the seed you cannot publish for your existing players any more: you would have to make a new key pair and hand out a
+new `openthor.exe` + `patcher.json` to everybody. Back up `site/state/` too (the data the patch diffs are made from).
+OdinGuard has its own keys, created by `og new` / the Studio; see its `docs/INTEGRATION.md`.
+
 ## Documents
 
 | | |
