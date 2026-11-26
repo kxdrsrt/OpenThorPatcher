@@ -232,4 +232,52 @@ cmp "$M/a.cfg" "$P3/a.cfg" || fail "a damaged file was accepted"
 grep -q "trying the next source" "$D/p4.log" || { cat "$D/p4.log"; fail "the fallback was not announced"; }
 ok "damaged file on one source: rejected by SHA-256, the next source delivers the master version"
 
+# OdinGuard hook: after a publish the master GRFs go into the OdinGuard profile and grf-manifest.json into the site.
+# A stand-in `og` records its arguments (OG=/path/to/og runs the real program against a throw-away profile instead).
+D="$W/odinguard"; M="$D/master"; S="$D/site"
+mkdir -p "$M/src/data"
+echo x > "$M/src/data/a.txt"
+"$TK" build -o "$M/data.grf" "$M/src" >/dev/null
+printf '[Data]\r\n0=data.grf\r\n' > "$M/DATA.INI"
+if [ -n "${OG:-}" ]; then
+  OGBIN=$OG
+  "$OGBIN" new --id testro --operator TestRO "$D/og.profile.toml" > /dev/null
+else
+  OGBIN="$D/og"
+  printf '%s\n' '#!/bin/sh' 'echo "$*" >> "$(dirname "$0")/og.args"' \
+    'if [ "$1" = grf-manifest ]; then echo "{\"files\":[{\"name\":\"data.grf\",\"size\":1,\"tail_sha256\":\"00\",\"required\":true}]}" > "$4"; echo "1 GRF version(s) written to $4"; else echo "data.grf scanned"; fi' > "$OGBIN"
+  chmod +x "$OGBIN"
+  touch "$D/og.profile.toml"
+fi
+cat > "$D/project.json" <<EOF
+{ "server": "TestRO", "client": "$M", "site": "$S", "base_urls": ["file://$S"], "thor": ["data.grf"],
+  "odinguard": { "profile": "og.profile.toml", "og": "$OGBIN", "optional": ["odin-dark.grf"] } }
+EOF
+"$OTP" publish --project "$D/project.json" --dry-run > "$D/dry.log" || { cat "$D/dry.log"; fail "odinguard dry run"; }
+grep -q "grf-manifest.json" "$D/dry.log" || { cat "$D/dry.log"; fail "the dry run does not show the OdinGuard step"; }
+[ ! -e "$S/grf-manifest.json" ] || fail "the dry run wrote the GRF manifest"
+"$OTP" publish --project "$D/project.json" > "$D/pub.log" 2>&1 || { cat "$D/pub.log"; fail "publish with the OdinGuard hook"; }
+[ -s "$S/grf-manifest.json" ] || { cat "$D/pub.log"; fail "no grf-manifest.json in the site"; }
+grep -q "before players patch" "$D/pub.log" || { cat "$D/pub.log"; fail "no hint to deploy the server config first"; }
+if [ -z "${OG:-}" ]; then
+  grep -q "^grf-scan --keep-previous --client $M --optional odin-dark.grf $D/og.profile.toml$" "$D/og.args" || { cat "$D/og.args"; fail "og grf-scan arguments"; }
+  grep -q "^grf-manifest $D/og.profile.toml -o $S/grf-manifest.json$" "$D/og.args" || { cat "$D/og.args"; fail "og grf-manifest arguments"; }
+else
+  grep -q '"name": "data.grf"' "$S/grf-manifest.json" || { cat "$S/grf-manifest.json"; fail "real og: data.grf missing in the manifest"; }
+fi
+ok "OdinGuard hook: og grf-scan (keep previous versions) and grf-manifest.json in the site, not in a dry run"
+P="$D/player"; mkdir -p "$P"; cp "$M/data.grf" "$P/data.grf"
+"$OTP" patch --url "file://$S" --client "$P" > "$D/patch.log" 2>&1 || { cat "$D/patch.log"; fail "patch with a GRF manifest on the site"; }
+if [ -z "${OG:-}" ]; then
+  grep -q "data.grf is not a version the server's OdinGuard accepts" "$D/patch.log" || { cat "$D/patch.log"; fail "the patcher did not report a GRF the server does not accept"; }
+  ok "patcher: a GRF that is not in the server's GRF manifest is reported after patching"
+else
+  grep -q "OdinGuard GRF check: 1 GRF(s) accepted" "$D/patch.log" || { cat "$D/patch.log"; fail "the patcher did not confirm the accepted GRF"; }
+  ok "patcher: the patched GRF matches the GRF manifest written by the real og"
+fi
+sed "s#\"og\": \"[^\"]*\"#\"og\": \"$D/missing-og\"#" "$D/project.json" > "$D/p2.json"
+if "$OTP" publish --project "$D/p2.json" > "$D/pub2.log" 2>&1; then fail "a missing og program was not reported"; fi
+grep -q "could not be started" "$D/pub2.log" || { cat "$D/pub2.log"; fail "no clear message for a missing og"; }
+ok "OdinGuard hook: a missing og program fails the publish with a clear message"
+
 echo "ALL OK"

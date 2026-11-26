@@ -50,6 +50,11 @@ function renderProject() {
   bind("#f-site", () => p.site, (v) => (p.site = v));
   bind("#f-seed", () => p.signing_seed || "", (v) => { p.signing_seed = v || null; loadPub(); });
   bind("#f-full", () => p.full, (v) => (p.full = v));
+  // OdinGuard hook: an empty profile switches it off; the og path is kept while a profile is set
+  const og = () => p.odinguard || (p.odinguard = { profile: "" });
+  const ogDone = () => { if (p.odinguard && !p.odinguard.profile) delete p.odinguard; };
+  bind("#f-og-profile", () => p.odinguard?.profile || "", (v) => { og().profile = v; ogDone(); });
+  bind("#f-og-bin", () => p.odinguard?.og || "", (v) => { if (!p.odinguard) return; if (v) p.odinguard.og = v; else delete p.odinguard.og; });
   renderStatus();
   loadPub();
 }

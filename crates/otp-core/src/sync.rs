@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use sha2::{Digest, Sha256};
 
 #[derive(Clone)]
 pub struct Config {
@@ -139,6 +140,9 @@ pub struct Summary {
     pub removed: Vec<String>,
     pub data_ini_written: bool,
     pub legacy: bool,
+    /// GRFs that are not a version the server's OdinGuard accepts (`grf-manifest.json` of the site)
+    #[serde(default)]
+    pub grf_not_accepted: Vec<String>,
 }
 
 impl Summary {
@@ -482,8 +486,95 @@ pub fn run(cfg: &Config, ev: &mut dyn FnMut(Event)) -> Result<Summary> {
     save_state(&cfg.client_dir, &st)?;
     if !cfg.dry_run {
         sum.data_ini_written = write_data_ini(cfg, &list)?;
+        sum.grf_not_accepted = grf_manifest_check(cfg, &list, ev);
     }
     Ok(sum)
+}
+
+/// SHA-256 of the 46-byte GRF header plus everything from the file table to the end (OdinGuard's "tail hash").
+pub fn grf_tail_hash(path: &Path) -> Result<(u64, String)> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).map_err(|e| io_err(path, e))?;
+    let size = f.metadata().map_err(|e| io_err(path, e))?.len();
+    let mut h = [0u8; 46];
+    f.read_exact(&mut h).map_err(|e| io_err(path, e))?;
+    let version = u32::from_le_bytes([h[42], h[43], h[44], h[45]]);
+    let off = if version == 0x300 && h[35..38] == [0, 0, 0] {
+        u64::from_le_bytes(h[30..38].try_into().unwrap_or_default())
+    } else {
+        u64::from(u32::from_le_bytes([h[30], h[31], h[32], h[33]]))
+    };
+    let mut d = Sha256::new();
+    d.update(h);
+    let pos = 46u64.saturating_add(off);
+    if pos < size {
+        f.seek(SeekFrom::Start(pos)).map_err(|e| io_err(path, e))?;
+        let mut buf = vec![0u8; 1 << 16];
+        loop {
+            let n = f.read(&mut buf).map_err(|e| io_err(path, e))?;
+            if n == 0 {
+                break;
+            }
+            d.update(&buf[..n]);
+        }
+    }
+    Ok((size, hex::encode(d.finalize())))
+}
+
+/// After patching: compares the client's GRFs with `grf-manifest.json` of the site (written by the Patch Maker's OdinGuard
+/// hook). A GRF the server does not accept would be reported by OdinGuard in game; the patcher says so now. Sites without
+/// the file are skipped; with a public key the manifest must carry a valid signature.
+fn grf_manifest_check(cfg: &Config, list: &PatchList, ev: &mut dyn FnMut(Event)) -> Vec<String> {
+    let base = if list.source.is_empty() { cfg.patch_url.clone() } else { list.source.clone() };
+    if base.is_empty() {
+        return vec![];
+    }
+    let url = join(&base, "grf-manifest.json");
+    let Ok(bytes) = get_bytes(&url) else { return vec![] };
+    if cfg.pub_key.is_some() || cfg.pub_key_hex.is_some() {
+        let sig = get_bytes(&format!("{url}.sig")).map(|b| String::from_utf8_lossy(&b).to_string()).unwrap_or_default();
+        let ok = match (&cfg.pub_key_hex, &cfg.pub_key) {
+            (Some(h), _) => sign::verify_hex(h, &bytes, &sig).is_ok(),
+            (None, Some(f)) => sign::verify(f, &bytes, &sig).is_ok(),
+            _ => true,
+        };
+        if !ok {
+            ev(Event::Info("grf-manifest.json has no valid signature, not used".into()));
+            return vec![];
+        }
+    }
+    let Ok(m) = serde_json::from_slice::<serde_json::Value>(&bytes) else { return vec![] };
+    let mut versions: BTreeMap<String, Vec<(u64, String, bool)>> = BTreeMap::new();
+    for f in m["files"].as_array().into_iter().flatten() {
+        let (Some(name), Some(size), Some(tail)) = (f["name"].as_str(), f["size"].as_u64(), f["tail_sha256"].as_str()) else { continue };
+        versions.entry(name.to_ascii_lowercase()).or_default().push((size, tail.to_ascii_lowercase(), f["required"].as_bool().unwrap_or(true)));
+    }
+    let mut bad = vec![];
+    for (name, vs) in &versions {
+        let Ok(rel) = safe_rel(name) else { continue };
+        let path = cfg.client_dir.join(rel);
+        if !path.is_file() {
+            if vs.iter().any(|v| v.2) {
+                ev(Event::Info(format!("warning: {name} is missing; the server's OdinGuard expects it")));
+                bad.push(name.clone());
+            }
+            continue;
+        }
+        let accepted = match grf_tail_hash(&path) {
+            Ok((size, tail)) => vs.iter().any(|v| v.0 == size && v.1 == tail),
+            Err(_) => false,
+        };
+        if !accepted {
+            ev(Event::Info(format!(
+                "warning: {name} is not a version the server's OdinGuard accepts (the server config may not be updated yet, or the file was changed)"
+            )));
+            bad.push(name.clone());
+        }
+    }
+    if bad.is_empty() && !versions.is_empty() {
+        ev(Event::Info(format!("OdinGuard GRF check: {} GRF(s) accepted", versions.len())));
+    }
+    bad
 }
 
 /// Rewrites `[Data]` of `DATA.INI` from the server's order and the player's pack choices. Returns whether it changed.

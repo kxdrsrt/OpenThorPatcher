@@ -9,7 +9,7 @@
 | M3b | Classic Thor Patcher servers (`plist.txt`), removals (GRF entries, files, folders), cloud links, optional packs | done, `tests/e2e.sh` |
 | M4 | Apps: **Patcher** (players) and **Patch Maker** (operators) in Tauri 2, themes, news and changelog | built for macOS and Windows x64 (cross-compiled); the Patcher was run on Windows 11 (x64 emulation) against an nginx container; UI logic also tested with a scripted DOM; **not yet clicked through by a person** |
 | M5 | MCP server `otp-mcp` | done (smoke tested over stdio) |
-| M6 | OdinGuard integration: `og grf-scan` hook in the Maker, manifest check after patching | planned |
+| M6 | OdinGuard integration: `og grf-scan` hook in the Maker (`odinguard` in the project, before the patch list is written), signed `grf-manifest.json` in the site, check of the GRFs against it after patching | done, `tests/e2e.sh` (stand-in `og` and, with `OG=…`, the real one) |
 | M7 | Self-update (signed), installers, themes (HTML/CSS skin), languages | planned |
 | M8 | Parallel downloads, bandwidth limit, binary deltas for single huge non-GRF files, zip/7z/rar input | planned |
 

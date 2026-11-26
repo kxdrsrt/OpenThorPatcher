@@ -96,6 +96,12 @@
         <div class="card form">
           <label class="switch-row"><span>Also publish whole GRFs<small>lets a damaged client repair itself without reinstalling; needs the disk space on your host</small></span><span class="switch"><input type="checkbox" id="f-full"><i></i></span></label>
         </div>
+        <h3>OdinGuard Anti Cheat</h3>
+        <div class="card form">
+          <p class="note wide" style="margin:0">Optional. After each publish the GRFs of the master client go into your OdinGuard profile (<code>og grf-scan</code>, older versions stay accepted) and <code>grf-manifest.json</code> goes into the site; the patcher then tells players when a GRF is not a version the server accepts. Needs the <code>og</code> program. Rebuild and deploy the server config before players patch.</p>
+          <label class="fld wide"><span>OdinGuard profile (.profile.toml)</span><span class="inline"><input id="f-og-profile" placeholder="empty = off"><button class="btn icon pick" data-for="f-og-profile" title="Choose file" aria-label="Choose OdinGuard profile"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+          <label class="fld wide"><span>og program</span><span class="inline"><input id="f-og-bin" placeholder="og (from PATH)"><button class="btn icon pick" data-for="f-og-bin" title="Choose file" aria-label="Choose the og program"><svg class="ic"><use href="#i-open"/></svg></button></span></label>
+        </div>
       </section>
 
       <section id="tab-files" class="tab needs-project">

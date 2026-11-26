@@ -13,10 +13,29 @@ patched yet, or have just patched, are reported. The order that is safe, and tha
 2. Publish the new `patchlist.json`.
 3. After most players patched: remove the old versions from the profile (`og grf-scan` without `--keep-previous`).
 
-The patcher can automate step 2's check: `odinguard.manifest` in the patch list points to the release's
-`manifest.json` (signed); after patching, the patcher compares the GRFs it wrote with the accepted list and warns the
-player ("your `cdata.grf` is not the version this server accepts, run the repair") instead of letting the guard flag
-them at login.
+**Automated in the Patch Maker** (`odinguard` in `otp-project.json`, or *OdinGuard Anti Cheat* on the Project page):
+
+```json
+"odinguard": { "profile": "../odinguard-profile/myserver.profile.toml", "og": "/usr/local/bin/og", "full": false, "optional": ["odin-dark.grf"] }
+```
+
+On every `otp publish` (not on `--dry-run`, which only lists the step) the Maker runs, before it writes the new patch
+list:
+
+1. `og grf-scan --keep-previous --client <master client> [--full] [--optional …] <profile>`: the profile accepts the new
+   GRF versions and keeps the old ones;
+2. `og grf-manifest <profile> -o <site>/grf-manifest.json`: the public list of accepted versions (hashes only), signed
+   like the patch list (`grf-manifest.json.sig`).
+
+If `og` is missing or fails, the publish stops and the old patch list stays. The Maker does not deploy your server:
+rebuild and deploy the server config (`og build`) **before** you upload the site (with *Git hosting* on, the push
+happens right after the publish, so deploy first or switch the push off for that publish).
+
+**Patcher side:** after patching, the patcher reads `grf-manifest.json` from the site (with a public key it must carry a
+valid signature) and compares size and tail hash of every listed GRF with the client's file. A GRF that is not an
+accepted version, or a required one that is missing, is shown as a warning (`otp patch`: `warning: cdata.grf is not a
+version the server's OdinGuard accepts …`; JSON summary `grf_not_accepted`) instead of the guard reporting the player
+at login. Sites without the file are not checked.
 
 ## 2. Files the patcher ships for OdinGuard
 

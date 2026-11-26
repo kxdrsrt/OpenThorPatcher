@@ -37,6 +37,47 @@ pub struct PublishReport {
     pub plan: Vec<PlanItem>,
     /// What `git push` said, when the project pushes.
     pub git: Option<String>,
+    /// Output of the OdinGuard hook (`og grf-scan`, `og grf-manifest`), when the project has `odinguard`.
+    pub odinguard: Option<String>,
+}
+
+/// OdinGuard hook: the master client's GRFs into the profile (old versions stay accepted while players patch), then
+/// the public GRF manifest into the site. The server config must be rebuilt and deployed before players patch.
+pub fn odinguard_hook(p: &Project, log: &mut dyn FnMut(&str)) -> Result<String> {
+    let Some(o) = &p.odinguard else { return Ok(String::new()) };
+    let og = o.og.clone().unwrap_or_else(|| "og".into());
+    let run = |args: Vec<std::ffi::OsString>| -> Result<String> {
+        let out = std::process::Command::new(&og).args(&args).output().map_err(|e| msg(format!("OdinGuard: {} could not be started: {e}", og.display())))?;
+        let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        if out.status.success() {
+            Ok(text.trim().to_string())
+        } else {
+            Err(msg(format!("OdinGuard: og {} failed: {}", args.first().map(|a| a.to_string_lossy().into_owned()).unwrap_or_default(), text.trim())))
+        }
+    };
+    let mut scan: Vec<std::ffi::OsString> = vec!["grf-scan".into(), "--keep-previous".into(), "--client".into(), p.client.clone().into()];
+    if o.full {
+        scan.push("--full".into());
+    }
+    for opt in &o.optional {
+        scan.push("--optional".into());
+        scan.push(opt.into());
+    }
+    scan.push(o.profile.clone().into());
+    let a = run(scan)?;
+    let b = run(vec!["grf-manifest".into(), o.profile.clone().into(), "-o".into(), p.site.join("grf-manifest.json").into()])?;
+    // signed like the patch list, so a mirror cannot change what the patcher compares against
+    if let Some(seed) = &p.signing_seed {
+        let m = p.site.join("grf-manifest.json");
+        let bytes = std::fs::read(&m).map_err(|e| io_err(&m, e))?;
+        write_atomic(&p.site.join("grf-manifest.json.sig"), sign::sign(seed, &bytes)?.as_bytes())?;
+    }
+    let text = format!("{a}\n{b}");
+    for l in text.lines() {
+        log(&format!("OdinGuard: {l}"));
+    }
+    log("OdinGuard: rebuild and deploy the server config (og build) before players patch, or they are reported as grf:modified");
+    Ok(text)
 }
 
 fn open(path: &Path, key: Option<&Key>) -> Result<Archive> {
@@ -304,8 +345,18 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     if rep.plan.is_empty() {
         plan(&mut rep, "none", "", "the patch site is up to date".into(), 0);
     }
+    if let Some(o) = &p.odinguard {
+        plan(&mut rep, "odinguard", "grf-manifest.json", format!("og grf-scan into {}, then the GRF manifest", o.profile.display()), 0);
+        if dry_run {
+            log(&format!("OdinGuard: would run og grf-scan into {} and write grf-manifest.json", o.profile.display()));
+        }
+    }
     if dry_run {
         return Ok(rep);
+    }
+    // OdinGuard first: when og fails, the old patch list stays the published one
+    if p.odinguard.is_some() {
+        rep.odinguard = Some(odinguard_hook(p, log)?);
     }
     // the serial (and the time) only move when the list really changed, so a publish without changes keeps every mirror valid
     let strip = |mut v: serde_json::Value| {

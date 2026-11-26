@@ -65,6 +65,26 @@ pub struct Project {
     pub news: Vec<NewsItem>,
     #[serde(default)]
     pub changelog: Vec<ChangeEntry>,
+    /// OdinGuard Anti Cheat (optional, needs its `og` program, no build dependency): after a publish the GRFs of the
+    /// master client enter the OdinGuard profile (`og grf-scan --keep-previous`) and `grf-manifest.json` (the GRF
+    /// versions the server accepts) is written to the site.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub odinguard: Option<OdinGuardCfg>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OdinGuardCfg {
+    /// the `.profile.toml` of the server
+    pub profile: PathBuf,
+    /// path of the `og` program (default: `og` from PATH)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub og: Option<PathBuf>,
+    /// also store the full SHA-256 of every GRF (slower for big GRFs, `og grf-scan --full`)
+    #[serde(default)]
+    pub full: bool,
+    /// GRFs players may lack (e.g. an optional competitive pack)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub optional: Vec<String>,
 }
 
 impl Project {
@@ -92,6 +112,7 @@ impl Project {
             links: vec![],
             news: vec![],
             changelog: vec![],
+            odinguard: None,
         }
     }
 
@@ -109,6 +130,15 @@ impl Project {
         fix(&mut p.site);
         if let Some(s) = p.signing_seed.as_mut() {
             fix(s);
+        }
+        if let Some(o) = p.odinguard.as_mut() {
+            fix(&mut o.profile);
+            if let Some(og) = o.og.as_mut() {
+                // a bare program name is looked up in PATH
+                if og.components().count() > 1 {
+                    fix(og);
+                }
+            }
         }
         Ok(p)
     }
