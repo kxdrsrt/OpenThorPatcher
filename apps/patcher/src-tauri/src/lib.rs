@@ -169,11 +169,21 @@ struct Init {
     language: String,
 }
 
+/// A second start of the patcher shows the running one instead of opening another window.
+fn show_running(app: &tauri::AppHandle) {
+    bring_to_front(app);
+    if let Some(w) = app.get_webview_window("main") {
+        // the taskbar button flashes when Windows does not let the window take the foreground
+        let _ = w.request_user_attention(Some(tauri::UserAttentionType::Informational));
+    }
+}
+
 /// The patcher is often started by the game (OdinGuard's "start the patcher now?"), which owns the foreground; without
 /// this its window opens behind the others. Briefly "always on top" is the reliable way to get in front on Windows.
 fn bring_to_front(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
+        let _ = w.unminimize();
         let _ = w.set_always_on_top(true);
         let _ = w.set_focus();
         let _ = w.set_always_on_top(false);
@@ -259,8 +269,12 @@ struct Checked {
 
 /// `--updated-to <version>`: this process was started by a self-update to that version.
 fn updated_to() -> Option<String> {
+    arg_value("--updated-to")
+}
+
+fn arg_value(name: &str) -> Option<String> {
     let a: Vec<String> = std::env::args().collect();
-    a.iter().position(|x| x == "--updated-to").and_then(|i| a.get(i + 1).cloned())
+    a.iter().position(|x| x == name).and_then(|i| a.get(i + 1).cloned())
 }
 
 /// The program that a self-update just installed reports an older version than announced (a wrong build or version on the
@@ -619,7 +633,7 @@ async fn update_patcher(app: tauri::AppHandle, st: State<'_, Arc<App>>) -> Res<S
             }
         })
         .map_err(err)?;
-        std::process::Command::new(&exe).arg("--updated-to").arg(&v).current_dir(exe_dir()).spawn().map_err(err)?;
+        std::process::Command::new(&exe).arg("--updated-to").arg(&v).arg("--after-pid").arg(std::process::id().to_string()).current_dir(exe_dir()).spawn().map_err(err)?;
         Ok(v)
     })
     .await
@@ -660,8 +674,14 @@ pub fn run() {
     if let Ok(me) = std::env::current_exe() {
         otp_core::launch::use_elevated_helper(me);
     }
+    // started by a self-update: the old patcher is closing, wait for it so the single-instance lock is free
+    if let Some(pid) = arg_value("--after-pid").and_then(|p| p.parse::<u32>().ok()) {
+        otp_core::launch::wait_pid_gone(pid, std::time::Duration::from_secs(15));
+    }
     let state = Arc::new(App { cancel: Arc::new(AtomicBool::new(false)), last: Mutex::new(None), busy: AtomicBool::new(false) });
     tauri::Builder::default()
+        // must be the first plugin: only one patcher runs at a time, a second start shows the running window
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_running(app)))
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![init, set_settings, check, patch, cancel, set_pack, play, setup, get_theme, open_url, server_status, update_patcher, panel_status, get_locales])

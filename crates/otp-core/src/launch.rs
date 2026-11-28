@@ -93,6 +93,21 @@ pub fn running(exe: &Path) -> usize {
     s.processes().values().filter(|p| p.exe().is_some_and(|e| same_file(e, exe))).count()
 }
 
+/// Waits until the process `pid` has ended (at most `max`). A self-update starts the new patcher while the old one is still
+/// closing; the new one must not meet the old one's single-instance lock, so it waits for it.
+pub fn wait_pid_gone(pid: u32, max: Duration) {
+    use sysinfo::{Pid, ProcessesToUpdate, System};
+    let start = Instant::now();
+    let mut s = System::new();
+    while start.elapsed() < max {
+        s.refresh_processes(ProcessesToUpdate::Some(&[Pid::from_u32(pid)]), true);
+        if s.process(Pid::from_u32(pid)).is_none() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 /// May `exe` be started now? Checks the double-click guard and the instance limit.
 pub fn may_start(exe: &Path, max_instances: u32) -> std::result::Result<(), Refused> {
     if let Ok(g) = LAST.lock() {
@@ -213,6 +228,24 @@ fn spawn(dir: &Path, full: &Path, args: &str, token: Option<&str>) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wait_pid_gone_returns_when_the_process_ended() {
+        #[cfg(unix)]
+        {
+            let mut c = Command::new("sleep").arg("1").spawn().unwrap();
+            let t = Instant::now();
+            let pid = c.id();
+            let h = std::thread::spawn(move || c.wait().unwrap());
+            wait_pid_gone(pid, Duration::from_secs(10));
+            h.join().unwrap();
+            assert!(t.elapsed() < Duration::from_secs(5), "returns soon after the process ended");
+        }
+        // a pid that does not exist returns at once
+        let t = Instant::now();
+        wait_pid_gone(u32::MAX - 7, Duration::from_secs(10));
+        assert!(t.elapsed() < Duration::from_secs(2));
+    }
 
     #[test]
     fn start_creates_the_folders_the_client_saves_to() {
