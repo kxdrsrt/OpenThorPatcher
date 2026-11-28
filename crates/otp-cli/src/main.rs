@@ -19,6 +19,27 @@ enum Cmd {
         #[arg(long, default_value = ".")]
         out: PathBuf,
     },
+    /// Back up the signing key of a project into ONE password-protected file (keep it away from the server and from git)
+    KeysBackup {
+        #[arg(long)]
+        project: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        /// more files to include, e.g. the SFTP key of the upload
+        #[arg(long = "also")]
+        also: Vec<PathBuf>,
+    },
+    /// Put the key of a backup file back (a different existing key is only replaced with --force)
+    KeysRestore {
+        file: PathBuf,
+        #[arg(long)]
+        project: PathBuf,
+        /// where extra files of the backup go
+        #[arg(long)]
+        extra_dir: Option<PathBuf>,
+        #[arg(long)]
+        force: bool,
+    },
     /// List the master client folder with a suggestion per file (thor / sync / ignore)
     Scan {
         #[arg(long)]
@@ -189,11 +210,37 @@ fn human(n: u64) -> String {
     format!("{v:.1} {}", u[i])
 }
 
+/// Password for key backups: OTP_KEYS_PASSWORD, otherwise asked on the terminal (not echoed).
+fn password(confirm: bool) -> otp_core::Result<String> {
+    if let Ok(p) = std::env::var("OTP_KEYS_PASSWORD") {
+        return Ok(p);
+    }
+    let pw = rpassword::prompt_password("Password for the key backup: ").map_err(|e| otp_core::msg(e.to_string()))?;
+    if confirm {
+        otp_core::keybackup::check_password(&pw)?;
+        if rpassword::prompt_password("Repeat the password: ").map_err(|e| otp_core::msg(e.to_string()))? != pw {
+            return Err(otp_core::msg("the passwords differ"));
+        }
+    }
+    Ok(pw)
+}
+
 fn real() -> otp_core::Result<()> {
     match Cli::parse().cmd {
         Cmd::Keygen { out } => {
             sign::keygen(&out)?;
             println!("wrote {}/signing.seed (keep secret) and patcher.pub", out.display());
+        }
+        Cmd::KeysBackup { project, out, also } => {
+            let n = otp_core::keybackup::backup(&project, &also, &out, &password(true)?)?;
+            println!("{n} key file(s) saved encrypted to {} and read back successfully. Keep it in two places and remember the password.", out.display());
+        }
+        Cmd::KeysRestore { file, project, extra_dir, force } => {
+            let bytes = std::fs::read(&file).map_err(|e| otp_core::io_err(&file, e))?;
+            let bundle = otp_core::keybackup::open(&bytes, &password(false)?)?;
+            for r in otp_core::keybackup::restore(&bundle, &project, extra_dir.as_deref(), force)? {
+                println!("{:8} {}", r.action, r.path);
+            }
         }
         Cmd::Scan { client, json } => {
             let items = scan_client(&client)?;

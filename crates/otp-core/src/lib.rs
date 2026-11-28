@@ -9,6 +9,7 @@
 pub mod apply;
 pub mod dataini;
 pub mod fetch;
+pub mod keybackup;
 pub mod launch;
 pub mod mega;
 pub mod midgard;

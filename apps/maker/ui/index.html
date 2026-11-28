@@ -67,6 +67,18 @@
       <button id="btn-save" class="btn primary" disabled><svg class="ic"><use href="#i-save"/></svg>Save</button>
     </header>
 
+    <dialog id="keys-dlg" class="dlg" aria-labelledby="keys-title">
+      <form method="dialog" id="keys-form" class="form">
+        <h3 id="keys-title"></h3>
+        <p id="keys-text" class="note" style="margin:0"></p>
+        <label class="fld"><span>Password</span><input id="keys-pw" type="password" autocomplete="new-password" minlength="8"></label>
+        <label class="fld" id="keys-pw2-row"><span>Repeat the password</span><input id="keys-pw2" type="password" autocomplete="new-password"></label>
+        <label class="chk" id="keys-force-row" hidden><input id="keys-force" type="checkbox"> Replace a key that already exists and differs</label>
+        <p id="keys-err" class="err" hidden></p>
+        <div class="row-btns"><button type="button" id="keys-cancel" class="btn">Cancel</button><button type="submit" id="keys-go" class="btn primary"></button></div>
+      </form>
+    </dialog>
+
     <main id="main">
       <div id="welcome" class="empty">
         <img src="icon.png" alt="" width="72" height="72">
@@ -91,6 +103,8 @@
           <p class="note wide" style="margin:0">Players check every patch list against your public key, so nobody else can send them files. The secret key stays on this computer.</p>
           <label class="fld wide"><span>Secret key file (signing.seed)</span><span class="inline"><input id="f-seed"><button class="btn icon pick" data-for="f-seed" title="Choose file" aria-label="Choose key file"><svg class="ic"><use href="#i-open"/></svg></button><button id="btn-keygen" class="btn"><svg class="ic"><use href="#i-key"/></svg>Create key pair…</button></span></label>
           <label class="fld wide"><span>Public key (goes into the player's patcher.json)</span><input id="f-pub" readonly></label>
+          <p id="keys-state" class="note wide" style="margin:0"></p>
+          <div class="wide row-btns"><button id="btn-keys-backup" class="btn primary">Back up key…</button><button id="btn-keys-restore" class="btn">Restore key…</button></div>
         </div>
         <h3>Options</h3>
         <div class="card form">

@@ -4,10 +4,11 @@ const base = require("path").join(__dirname, "../../apps") + "/";
 async function mk(app, mock) {
   const dir = base + app + "/ui/";
   const html = fs.readFileSync(dir + "index.html", "utf8").replace('<script src="app.js"></script>', "");
-  const dom = new JSDOM(html, { runScripts: "outside-only", pretendToBeVisual: true });
+  const dom = new JSDOM(html, { runScripts: "outside-only", pretendToBeVisual: true, url: "https://app.test/" });
   const w = dom.window; w.errors = [];
   w.addEventListener("error", (e) => w.errors.push(e.message));
   w.HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+  w.HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
   w.__TAURI__ = mock(w);
   // the scripts index.html loads before app.js (the patcher's languages); the Maker has none
   for (const f of ["i18n.js", "locales/en.js", "locales/de.js"]) if (fs.existsSync(dir + f)) w.eval(fs.readFileSync(dir + f, "utf8"));
@@ -19,7 +20,7 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
 (async () => {
   // ---- maker
   const project = { server: "TestRO", client: "/m", site: "/s", base_urls: ["https://p.example/"], thor: ["data.grf"], sync: ["odin.grf"], remove: ["old.dll"], signing_seed: "/k/signing.seed", full: true, news_url: "", notice: "", game: null, data_ini: { order: ["odin.grf", "@pack:comp"], packs: [{ id: "comp", file: "odin-dark.grf", title: "Comp", default: true, locked: false }] }, url_map: {}, allow_patching: true, message: "" };
-  const saved = [];
+  const saved = [], calls = [];
   let w = await mk("maker", (w) => ({
     core: { invoke: async (c, a) => { switch (c) {
       case "app_version": return "0.1.0";
@@ -28,6 +29,8 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
       case "scan": return [{ path: "data.grf", size: 2.5e9, suggest: "thor" }, { path: "odin.grf", size: 3e6, suggest: "sync" }, { path: "ragexe.exe", size: 8e6, suggest: "sync" }];
       case "site_status": return { published: true, server: "TestRO", updated: "2026-11-25T00:00:00Z", patches: 3, files: 2, targets: 1, signed: true };
       case "read_pub": return "ab".repeat(32);
+      case "keys_backup": calls.push(["keys_backup", a]); return 2;
+      case "keys_restore": calls.push(["keys_restore", a]); return [{ path: "/k/signing.seed", action: "written" }, { path: "/k/patcher.pub", action: "kept" }];
       case "patcher_config": return JSON.stringify({ name: a.project.server, pub_key: a.pubHex, h: a.headerName });
       case "files_to_upload": return [{ rel: "files/odin.grf", size: 3e6, url: "" }, { rel: "patches/0001-data.thor", size: 1000, url: "" }, { rel: "patchlist.json", size: 10, url: "" }];
       case "export_theme": return "/x/patcher-theme";
@@ -80,6 +83,23 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   ok(saved.length >= 1 && saved[saved.length - 1].url_map["files/odin.grf"], "maker: saved before plan with link");
   ok(saved[saved.length - 1].news.map((n) => n.lang).join(",") === "de,en", "maker: news languages saved");
   ok(saved[saved.length - 1].game && saved[saved.length - 1].game.max_instances === 1, "maker: game windows limit saved as a number");
+  // key backup: one password-protected file, "not backed up" until it was done
+  d.querySelector("nav button[data-tab=project]").click(); await sleep(30);
+  const dlg = d.getElementById("keys-dlg"), go = () => d.getElementById("keys-form").dispatchEvent(new w.Event("submit", { cancelable: true }));
+  ok(d.getElementById("keys-state").textContent.includes("Not backed up yet") && d.getElementById("keys-state").classList.contains("warn"), "maker: warns while the key was never backed up");
+  d.getElementById("btn-keys-backup").click(); await sleep(30);
+  ok(dlg.hasAttribute("open") && !d.getElementById("keys-pw2-row").hidden, "maker: the password dialog opens");
+  d.getElementById("keys-pw").value = "short"; go(); await sleep(30);
+  ok(d.getElementById("keys-err").textContent.includes("8 characters"), "maker: a short password is refused");
+  d.getElementById("keys-pw").value = "long enough pw"; d.getElementById("keys-pw2").value = "another one"; go(); await sleep(30);
+  ok(d.getElementById("keys-err").textContent.includes("differ"), "maker: two different passwords are refused");
+  d.getElementById("keys-pw2").value = "long enough pw"; go(); await sleep(120);
+  const bk = calls.find((c) => c[0] === "keys_backup");
+  ok(bk && bk[1].out === "/x/p.json" && bk[1].password === "long enough pw", "maker: the backup is made with the chosen file and password");
+  ok(!dlg.hasAttribute("open") && d.getElementById("keys-state").textContent.includes("backed up on") && !d.getElementById("keys-state").classList.contains("warn"), "maker: afterwards the date is shown, no warning");
+  d.getElementById("btn-keys-restore").click(); await sleep(30);
+  d.getElementById("keys-pw").value = "long enough pw"; go(); await sleep(150);
+  ok(d.getElementById("toast").textContent.includes("1 written") && d.getElementById("toast").textContent.includes("1 differ"), "maker: restore reports what was written and what was kept");
   ok(w.errors.length === 0, "maker: no script errors " + w.errors.join(";"));
   // ---- patcher
   const mkp = (summary, extra = {}) => (w) => ({

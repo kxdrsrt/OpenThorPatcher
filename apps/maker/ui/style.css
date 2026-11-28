@@ -245,3 +245,15 @@ pre.out { background: var(--surface); border: 1px solid var(--line); border-radi
 .mono { font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace; font-size: 12px; }
 textarea { width: 100%; border-radius: 7px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--text); font: inherit; padding: 6px 9px; resize: vertical; user-select: text; }
 textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* key backup */
+.row-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+.note.warn { color: var(--warn); }
+.dlg { background: var(--surface, #131a27); color: var(--text); border: 1px solid var(--line-strong, rgba(255,255,255,.16)); border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, .45); padding: 20px 22px; width: min(460px, 92vw); }
+.dlg::backdrop { background: rgba(0, 0, 0, .55); }
+.dlg h3 { margin: 0 0 8px; font-size: 15px; }
+.dlg .form { display: flex; flex-direction: column; gap: 12px; }
+.dlg .row-btns { justify-content: flex-end; }
+.chk { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.err { margin: 0; color: var(--danger, #ff7a6e); font-size: 13px; }
+.err[hidden] { display: none; }

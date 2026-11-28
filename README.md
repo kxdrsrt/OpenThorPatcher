@@ -141,6 +141,13 @@ again; it refuses to overwrite an existing key.
 | `signing.seed` | the secret signing key | stays on your computer; **back it up** (password manager or an encrypted archive) and never upload or commit it |
 | `patcher.pub` | the public key | into the `patcher.json` you give players (the Patch Maker does this for you) |
 
+**Back it up with one click:** Patch Maker → Project → *Signing key* → **Back up key…** asks for a password and writes ONE
+encrypted file (`.otpkeys`, Argon2id + XChaCha20-Poly1305; the file is read back before it counts). **Restore key…**
+puts the key back on a new computer. The same on the command line:
+`otp keys-backup --project otp-project.json --out keys.otpkeys [--also <more files, e.g. your SFTP key>]` and
+`otp keys-restore keys.otpkeys --project otp-project.json` (password asked, not echoed; `OTP_KEYS_PASSWORD` for scripts).
+Keep the file in two places (not on the server, not in git) and the password in your password manager.
+
 Every patch list is signed with `signing.seed`; players' patchers only accept lists that match their `patcher.pub`. If you
 lose the seed you cannot publish for your existing players any more: you would have to make a new key pair and hand out a
 new `openthor.exe` + `patcher.json` to everybody. Back up `site/state/` too (the data the patch diffs are made from).

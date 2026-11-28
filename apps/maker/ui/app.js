@@ -64,6 +64,7 @@ function renderProject() {
   bind("#u-mac", () => p.patcher?.files?.["macos-arm64"] || "", puFile("macos-arm64"));
   renderStatus();
   loadPub();
+  renderKeyState();
 }
 
 async function renderStatus() {
@@ -497,6 +498,65 @@ $("#btn-cfg-save").onclick = async () => {
   const p = await T.dialog.save({ defaultPath: "patcher.json", filters: [{ name: "JSON", extensions: ["json"] }] });
   if (p) invoke("write_text", { path: p, text: $("#cfg-out").textContent }).then(() => status("Saved.")).catch((e) => status(String(e), false));
 };
+// One password-protected file with the signing key (it never leaves this computer unencrypted).
+const stampKey = () => "otp.keys.backed." + (project?.signing_seed || "");
+function renderKeyState() {
+  const st = $("#keys-state"), has = !!project?.signing_seed, when = has ? localStorage.getItem(stampKey()) : null;
+  $("#btn-keys-backup").disabled = !has || !path;
+  $("#btn-keys-restore").disabled = !path;
+  st.classList.toggle("warn", has && !when);
+  st.innerHTML = !has ? "No key yet: create a key pair, or restore one from a backup."
+    : when ? `Key backed up on ${esc(new Date(+when).toLocaleString())}.`
+    : "<b>Not backed up yet.</b> Without this key you can never publish for your existing players again. One file, one password: keep it in two places (not on the server, not in git).";
+}
+
+function keysDialog(mode) {
+  if (!path) { status("Save the project first.", false); return; }
+  const d = $("#keys-dlg"), backup = mode === "backup";
+  $("#keys-title").textContent = backup ? "Back up the signing key" : "Restore the signing key";
+  $("#keys-text").textContent = backup
+    ? "Choose a password (at least 8 characters). Write it down or keep it in your password manager: without it the file cannot be opened."
+    : "Choose the backup file, then enter its password. A key that already exists and is the same stays as it is.";
+  $("#keys-go").textContent = backup ? "Choose file and back up" : "Choose file and restore";
+  $("#keys-pw2-row").hidden = !backup;
+  $("#keys-force-row").hidden = backup;
+  $("#keys-pw").value = $("#keys-pw2").value = ""; $("#keys-force").checked = false; $("#keys-err").hidden = true;
+  d.dataset.mode = mode;
+  d.showModal();
+  $("#keys-pw").focus();
+}
+$("#btn-keys-backup").onclick = () => keysDialog("backup");
+$("#btn-keys-restore").onclick = () => keysDialog("restore");
+$("#keys-cancel").onclick = () => $("#keys-dlg").close();
+$("#keys-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const d = $("#keys-dlg"), backup = d.dataset.mode === "backup", pw = $("#keys-pw").value;
+  const fail = (m) => { $("#keys-err").textContent = m; $("#keys-err").hidden = false; };
+  if (pw.length < 8) return fail("The password needs at least 8 characters.");
+  if (backup && pw !== $("#keys-pw2").value) return fail("The two passwords differ.");
+  try {
+    if (backup) {
+      const out = await T.dialog.save({ defaultPath: `${(project.server || "server").replace(/\W+/g, "-")}-keys.otpkeys`, filters: [{ name: "OpenThor key backup", extensions: ["otpkeys"] }] });
+      if (!out) return;
+      if (dirty) await save();
+      const n = await invoke("keys_backup", { path, out, password: pw });
+      localStorage.setItem(stampKey(), String(Date.now()));
+      d.close(); renderKeyState();
+      status(`${n} key file(s) saved encrypted and read back successfully. Keep the file in two places and remember the password.`);
+    } else {
+      const file = await T.dialog.open({ filters: [{ name: "OpenThor key backup", extensions: ["otpkeys"] }] });
+      if (!file) return;
+      if (dirty) await save();
+      const res = await invoke("keys_restore", { path, file, password: pw, force: $("#keys-force").checked });
+      d.close();
+      await openProject(path);
+      localStorage.setItem(stampKey(), String(Date.now())); renderKeyState();
+      const kept = res.filter((r) => r.action === "kept").length;
+      status(`Restored: ${res.filter((r) => r.action === "written").length} written, ${res.filter((r) => r.action === "same").length} already the same` + (kept ? `, ${kept} differ and were kept (tick "Replace" to overwrite).` : "."), kept ? "warn" : "ok");
+    }
+  } catch (e) { fail(String(e)); }
+});
+
 $("#btn-keygen").onclick = async () => {
   const dir = await T.dialog.open({ directory: true, title: "Folder for the new key pair (keep it private)" });
   if (!dir) return;

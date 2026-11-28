@@ -71,6 +71,24 @@ fn make_keys(dir: String) -> Res<Keys> {
     Ok(Keys { seed_path: seed.display().to_string(), pub_hex })
 }
 
+/// The signing key (and its public key) of the project in ONE password-protected file, read back before it counts.
+#[tauri::command]
+async fn keys_backup(path: String, out: String, password: String) -> Res<usize> {
+    tauri::async_runtime::spawn_blocking(move || otp_core::keybackup::backup(Path::new(&path), &[], Path::new(&out), &password).map_err(err)).await.map_err(err)?
+}
+
+#[tauri::command]
+async fn keys_restore(path: String, file: String, password: String, force: bool) -> Res<Vec<otp_core::keybackup::Restored>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = std::fs::read(&file).map_err(err)?;
+        let bundle = otp_core::keybackup::open(&bytes, &password).map_err(err)?;
+        let dir = Path::new(&path).parent().unwrap_or(Path::new(".")).to_path_buf();
+        otp_core::keybackup::restore(&bundle, Path::new(&path), Some(&dir), force).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+
 #[tauri::command]
 fn read_pub(dir: String) -> Res<String> {
     Ok(std::fs::read_to_string(Path::new(&dir).join("patcher.pub")).map_err(err)?.trim().to_string())
@@ -239,6 +257,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             app_version,
+            keys_backup,
+            keys_restore,
             scan,
             load_project,
             save_project,
