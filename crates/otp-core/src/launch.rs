@@ -144,12 +144,27 @@ pub fn start_checked(dir: &Path, exe: &str, args: &str, max_instances: u32) -> R
         return Err(msg(format!("{} not found in the client folder", full.display())));
     }
     may_start(&full, max_instances).map_err(|r| msg(r.to_string()))?;
+    ensure_client_dirs(dir);
     let token = write_ticket(dir)?;
     spawn(dir, &full, args, Some(&token))?;
     if let Ok(mut g) = LAST.lock() {
         *g = Some((full, Instant::now()));
     }
     Ok(())
+}
+
+/// Folders the client writes to (chat window layout, screenshots, replays). Neither the sync nor the client package
+/// carries them (they hold the player's own files), so a new player's client has none and the game ends with an error
+/// ("SaveData\\ChatWndInfo_U.lua") when it saves its settings.
+const CLIENT_DIRS: &[&str] = &["SaveData", "ScreenShot", "Replay"];
+
+fn ensure_client_dirs(dir: &Path) {
+    for d in CLIENT_DIRS {
+        let p = dir.join(d);
+        if !p.exists() {
+            let _ = std::fs::create_dir_all(&p);
+        }
+    }
 }
 
 /// Starts a program (setup) without ticket and limits.
@@ -198,6 +213,18 @@ fn spawn(dir: &Path, full: &Path, args: &str, token: Option<&str>) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn start_creates_the_folders_the_client_saves_to() {
+        let d = std::env::temp_dir().join(format!("otp-dirs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("SaveData")).unwrap();
+        ensure_client_dirs(&d);
+        assert!(d.join("SaveData").is_dir() && d.join("ScreenShot").is_dir() && d.join("Replay").is_dir());
+        let names: Vec<_> = std::fs::read_dir(&d).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_lowercase()).collect();
+        assert_eq!(names.iter().filter(|n| *n == "savedata").count(), 1, "an existing folder is not duplicated");
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn tickets_and_double_click() {

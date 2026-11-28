@@ -169,8 +169,20 @@ struct Init {
     language: String,
 }
 
+/// The patcher is often started by the game (OdinGuard's "start the patcher now?"), which owns the foreground; without
+/// this its window opens behind the others. Briefly "always on top" is the reliable way to get in front on Windows.
+fn bring_to_front(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_always_on_top(true);
+        let _ = w.set_focus();
+        let _ = w.set_always_on_top(false);
+    }
+}
+
 #[tauri::command]
 fn init(app: tauri::AppHandle) -> Init {
+    bring_to_front(&app);
     let s = load_settings(&app);
     let version = env!("CARGO_PKG_VERSION").to_string();
     if let Ok(exe) = std::env::current_exe() {
