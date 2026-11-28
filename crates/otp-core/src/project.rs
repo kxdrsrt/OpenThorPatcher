@@ -20,6 +20,10 @@ pub struct Project {
     /// Mirror base URLs, first one is tried first. May be empty when every file has a full link in `url_map`.
     #[serde(default)]
     pub base_urls: Vec<String>,
+    /// Other addresses of the same patch site (published in the patch list as `sites`): players' patchers remember them and
+    /// fall back to them when the address in their `patcher.json` stops answering (a server move).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<String>,
     /// GRFs (relative to the master client) patched entry by entry with Thor patches.
     #[serde(default)]
     pub thor: Vec<String>,
@@ -150,6 +154,7 @@ impl Project {
             client,
             site,
             base_urls: vec![],
+            sites: vec![],
             thor: vec![],
             sync: vec![],
             remove: vec![],

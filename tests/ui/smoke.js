@@ -83,6 +83,17 @@ const ok = (c, m) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) process
   ok(saved.length >= 1 && saved[saved.length - 1].url_map["files/odin.grf"], "maker: saved before plan with link");
   ok(saved[saved.length - 1].news.map((n) => n.lang).join(",") === "de,en", "maker: news languages saved");
   ok(saved[saved.length - 1].game && saved[saved.length - 1].game.max_instances === 1, "maker: game windows limit saved as a number");
+  // server move: other addresses of the patch site
+  d.querySelector("nav button[data-tab=hosting]").click(); await sleep(80);
+  ok(d.querySelectorAll("#site-list .item").length === 0 && d.getElementById("site-list").textContent.includes("only needed when"), "maker: no other patch site address by default");
+  d.getElementById("site-new").value = "ftp://x"; d.getElementById("btn-site-add").click(); await sleep(30);
+  ok(d.getElementById("toast").textContent.includes("starts with https") && d.querySelectorAll("#site-list .item").length === 0, "maker: a bad patch site address is refused");
+  d.getElementById("site-new").value = "https://new-host.example.com/"; d.getElementById("btn-site-add").click(); await sleep(30);
+  d.getElementById("site-new").value = "https://new-host.example.com"; d.getElementById("btn-site-add").click(); await sleep(30);
+  ok(d.querySelectorAll("#site-list .item").length === 1 && !d.getElementById("dirty").hidden, "maker: a patch site address is added once (a trailing slash is the same address)");
+  d.querySelector("#site-list .item button").click(); await sleep(30);
+  ok(d.querySelectorAll("#site-list .item").length === 0, "maker: the address can be removed again");
+
   // key backup: one password-protected file, "not backed up" until it was done
   d.querySelector("nav button[data-tab=project]").click(); await sleep(30);
   const dlg = d.getElementById("keys-dlg"), go = () => d.getElementById("keys-form").dispatchEvent(new w.Event("submit", { cancelable: true }));

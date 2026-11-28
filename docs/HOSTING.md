@@ -127,6 +127,31 @@ GitHub token never goes to the second source.
 one it applied, a missing primary, and a damaged file on one source (`tests/e2e.sh`). The 45-second stall limit and the proxy
 setting are in the code and have **not** been tested against a real stalled server or a real proxy.
 
+## Moving the patch site to another address (server move, 0.6.2)
+
+The address in a player's `patcher.json` cannot be changed from outside, so a move needs the **old address to stay up long
+enough for one publish**. Do it in this order:
+
+1. Set up the new host (same site layout) and upload the site folder there (`otp upload`, or copy it). Keep the state folder
+   `state/` with it: the serial must continue, not restart.
+2. In the Patch Maker (*Hosting → Other addresses of this patch site*) or in `otp-project.json` (`"sites": ["https://new/"]`)
+   add the new address and **publish** once. The new address is now in the signed patch list (`sites`). Upload that list to
+   **both** hosts.
+3. Players' patchers read it at their next start and remember the address. From then on they use it whenever the old one does
+   not answer, and a list from the new host (a higher serial) wins like any other source.
+4. When you are sure that your players have started the patcher since then, shut the old host down. A player who did not
+   start it in between still has only the old address: give them a new `openthor.exe` + `patcher.json` (the Maker's
+   *Client package*, which also lists the other addresses as `fallback_urls`) or move the old domain to the new host.
+5. Later you can take the old address out of `base_urls` and publish again: the remembered addresses follow the newest list, so
+   a dropped one disappears from the clients.
+
+Things that make it easier: use **your own domain** for `patch_url` from the start (then a move is a DNS change, nothing to do
+at the players), and keep at most six extra addresses (a dead one costs its connect timeout at every start).
+
+*Tested:* `tests/e2e.sh` (section "a server move"): a client with only the old address learns the new one from the signed
+list, the old address disappears, the client still patches from the remembered one; a dropped address is forgotten; a bad
+address (`ftp://`) is refused when publishing. Not tested against real hosts.
+
 ## Uploading (`otp upload`)
 
 Since 0.4.0 the Patch Maker (Hosting → *Upload*) and `otp upload` copy everything to its places, so nothing has to be

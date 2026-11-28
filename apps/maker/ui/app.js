@@ -301,6 +301,8 @@ function renderServers() {
 
 function renderMirrors() {
   list("#mirror-list", project.base_urls, "No mirror yet: add one, or give every file a cloud link below.", (i) => { project.base_urls.splice(i, 1); renderMirrors(); renderConfig(); });
+  project.sites = project.sites || [];
+  list("#site-list", project.sites, "None: only needed when the patch site moves to another address.", (i) => { project.sites.splice(i, 1); touch(); renderMirrors(); renderConfig(); });
 }
 
 async function renderLinks() {
@@ -361,6 +363,7 @@ async function openProject(p) {
   project.links = project.links || [];
   project.servers = project.servers || [];
   project.changelog = project.changelog || [];
+  project.sites = project.sites || [];
   path = p;
   render();
   status("Project opened.");
@@ -481,6 +484,14 @@ $("#btn-theme").onclick = async () => {
   const dir = await T.dialog.open({ directory: true, title: "Folder to write patcher-theme/ into (usually the master client)" });
   if (!dir) return;
   invoke("export_theme", { dir }).then((p) => status("Theme written to " + p + ". Edit it, then add its files on the Files page.")).catch((e) => status(String(e), false));
+};
+$("#btn-site-add").onclick = () => {
+  const v = $("#site-new").value.trim();
+  if (!v) return;
+  if (!/^(https?|file):\/\/.{2,}/i.test(v)) { status("A patch site address starts with https:// (or http://).", false); return; }
+  project.sites = project.sites || [];
+  if (!project.sites.some((x) => x.replace(/\/+$/, "") === v.replace(/\/+$/, ""))) project.sites.push(v);
+  $("#site-new").value = ""; touch(); renderMirrors(); renderConfig();
 };
 $("#btn-mirror-add").onclick = () => { const v = $("#mirror-new").value.trim(); if (v) { project.base_urls.push(v); $("#mirror-new").value = ""; touch(); renderMirrors(); renderConfig(); } };
 $("#mirror-new").onkeydown = (e) => e.key === "Enter" && $("#btn-mirror-add").click();

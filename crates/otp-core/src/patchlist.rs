@@ -37,6 +37,11 @@ pub struct PatchList {
     pub news_url: String,
     /// Mirrors; a relative `url` is appended to the first one that works.
     pub base_url: Vec<String>,
+    /// Other patch sites that hold this same site (with their own `patchlist.json`), e.g. after the server moved. A client
+    /// remembers them (the list is signed) and reads the patch list from them when the address in its `patcher.json` stops
+    /// answering. Unlike `base_url` (where files come from) these are places to find the patch list itself.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<String>,
     /// Whole files kept equal to the master by hash (small GRFs, dll, exe).
     #[serde(default)]
     pub files: Vec<FileEntry>,

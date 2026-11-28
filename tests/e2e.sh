@@ -232,6 +232,43 @@ cmp "$M/a.cfg" "$P3/a.cfg" || fail "a damaged file was accepted"
 grep -q "trying the next source" "$D/p4.log" || { cat "$D/p4.log"; fail "the fallback was not announced"; }
 ok "damaged file on one source: rejected by SHA-256, the next source delivers the master version"
 
+# ---- a server move: the patch list names the new address, the client remembers it ----------------------------------------
+D="$W/move"; M="$D/m"; A="$D/old"; B="$D/new"; P="$D/p"; mkdir -p "$M" "$P"
+echo v1 > "$M/a.cfg"
+"$OTP" keygen --out "$D/k" > /dev/null
+cat > "$D/project.json" <<EOF2
+{"server":"MoveRO","client":"$M","site":"$A","base_urls":["file://$A","file://$B"],"sites":["file://$B"],"sync":["a.cfg"],"signing_seed":"$D/k/signing.seed"}
+EOF2
+"$OTP" publish --project "$D/project.json" > /dev/null || fail "move: publish 1"
+grep -q '"sites"' "$A/patchlist.json" || fail "the patch list does not carry the sites"
+cp -R "$A" "$B"
+"$OTP" patch --url "file://$A" --client "$P" --pub "$D/k/patcher.pub" > "$D/p1.log" 2>&1 || { cat "$D/p1.log"; fail "move: first patch"; }
+grep -q "file://$B" "$P/_patch/state.json" || { cat "$P/_patch/state.json"; fail "the client did not remember the new site"; }
+ok "move: the client knows only the old address, learns the new one from the signed list"
+rm -rf "$A"                                              # the old server is gone
+echo v2 > "$M/a.cfg"
+mkdir "$A" && cp -R "$B/." "$A/" && "$OTP" publish --project "$D/project.json" > /dev/null || fail "move: publish 2"
+rm -rf "$B" && mkdir "$B" && cp -R "$A/." "$B/" && rm -rf "$A"
+"$OTP" patch --url "file://$A" --client "$P" --pub "$D/k/patcher.pub" > "$D/p2.log" 2>&1 || { cat "$D/p2.log"; fail "move: patch with the old address gone"; }
+cmp "$M/a.cfg" "$P/a.cfg" || { cat "$D/p2.log"; fail "the client did not get v2 from the remembered site"; }
+ok "move: the old address is gone, the client still patches from the remembered new site"
+# the operator drops the site again: the client forgets it with the next list
+echo v3 > "$M/a.cfg"
+sed 's#,"sites":\["file://'"$B"'"\]##' "$D/project.json" > "$D/project2.json"
+grep -q '"sites"' "$D/project2.json" && fail "test setup: the sites were not removed from the project"
+mkdir "$A" && cp -R "$B/." "$A/"                         # the operator's site folder (with its state) is on the new host now
+"$OTP" publish --project "$D/project2.json" > /dev/null || fail "move: publish 3"
+grep -q '"sites"' "$A/patchlist.json" && fail "the list still carries the dropped site"
+cp -R "$A/." "$B/"
+"$OTP" patch --url "file://$B" --client "$P" --pub "$D/k/patcher.pub" > "$D/p3.log" 2>&1 || { cat "$D/p3.log"; fail "move: patch after dropping the site"; }
+grep -q "file://" "$P/_patch/state.json" && { cat "$P/_patch/state.json"; fail "the client kept a site the operator dropped"; }
+ok "move: a site the operator drops disappears from the client with the next list"
+# an address that is not a patch site is refused when publishing
+sed 's#"sites":\["file://'"$B"'"\]#"sites":["ftp://x"]#' "$D/project.json" > "$D/project3.json"
+if "$OTP" publish --project "$D/project3.json" > "$D/pub4.log" 2>&1; then fail "a bad site address was accepted"; fi
+grep -q "not a patch site address" "$D/pub4.log" || { cat "$D/pub4.log"; fail "no clear message for a bad site address"; }
+ok "move: a bad site address is refused when publishing"
+
 # ---- parallel downloads and the bandwidth limit -------------------------------------------------------------------------
 D="$W/parallel"; M="$D/m"; S="$D/site"; P="$D/p"; P1="$D/p1"; mkdir -p "$M" "$P" "$P1"
 i=1; while [ $i -le 12 ]; do head -c 65536 /dev/urandom > "$M/f$i.bin"; i=$((i+1)); done

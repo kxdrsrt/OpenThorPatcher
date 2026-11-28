@@ -223,6 +223,12 @@ pub fn publish(p: &Project, grf_key: Option<Key>, dry_run: bool, log: &mut dyn F
     list.schema = SCHEMA;
     list.server = p.server.clone();
     list.base_url = p.base_urls.clone();
+    for u in &p.sites {
+        if !crate::sync::is_site_url(u) {
+            return Err(msg(format!("'{u}' is not a patch site address (http://, https:// or file://)")));
+        }
+    }
+    list.sites = p.sites.clone();
     list.allow_patching = p.allow_patching;
     list.message = p.message.clone();
     list.notice = p.notice.clone();

@@ -2943,7 +2943,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openthor-maker"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "otp-core",
  "serde",
@@ -2955,7 +2955,7 @@ dependencies = [
 
 [[package]]
 name = "openthor-patcher"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "otp-core",
  "serde",
@@ -2984,7 +2984,7 @@ dependencies = [
 
 [[package]]
 name = "otp-cli"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "clap",
  "otp-core",
@@ -2994,7 +2994,7 @@ dependencies = [
 
 [[package]]
 name = "otp-core"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "aes 0.8.4",
  "argon2",
@@ -3015,7 +3015,7 @@ dependencies = [
 
 [[package]]
 name = "otp-mcp"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "otp-core",
  "serde_json",
@@ -3023,7 +3023,7 @@ dependencies = [
 
 [[package]]
 name = "otp-testkit"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "otp-core",
  "rgrf-core",

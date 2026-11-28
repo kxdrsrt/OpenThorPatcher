@@ -28,6 +28,7 @@ patch list (`kind = "delta"`), never a change of `.thor`.
   "notice": "Welcome back!",
   "news_url": "https://example.com/news",
   "base_url": ["https://patch.example.com/", "https://mirror.example.net/patch/"],
+  "sites": ["https://new-host.example.com/"],
   "files": [
     { "path": "odin.grf", "size": 3057437, "sha256": "…", "url": "files/odin.grf" }
   ],

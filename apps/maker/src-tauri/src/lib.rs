@@ -199,7 +199,14 @@ fn patcher_config(project: Project, pub_hex: String, list_url: Option<String>, h
         v["list_url"] = serde_json::Value::String(u);
     }
     // every further mirror is also a place to read the patch list from, so the first one being down does not stop patching
-    let more: Vec<&String> = project.base_urls.iter().skip(1).filter(|u| !u.is_empty()).collect();
+    // (and every other address of the patch site, see "sites": a server move)
+    let mut more: Vec<&String> = Vec::new();
+    for u in project.base_urls.iter().skip(1).chain(project.sites.iter()) {
+        let key = u.trim_end_matches('/');
+        if !u.is_empty() && key != base.trim_end_matches('/') && !more.iter().any(|m| m.trim_end_matches('/') == key) {
+            more.push(u);
+        }
+    }
     if !more.is_empty() {
         v["fallback_urls"] = serde_json::json!(more);
     }

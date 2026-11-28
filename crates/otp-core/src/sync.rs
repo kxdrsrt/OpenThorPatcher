@@ -135,6 +135,18 @@ struct State {
     /// `serial` of the newest patch list this client applied; an older list is refused
     #[serde(default)]
     list_serial: u64,
+    /// Patch sites learned from the last valid patch list (`sites`); read like `fallback_urls`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    sites: Vec<String>,
+}
+
+/// At most this many learned sites are kept (a dead one costs its connect timeout on every run).
+const MAX_SITES: usize = 6;
+
+/// An address a patch list may name as another patch site.
+pub fn is_site_url(u: &str) -> bool {
+    let l = u.trim().to_ascii_lowercase();
+    ["http://", "https://", "file://"].iter().any(|p| l.starts_with(p)) && l.len() > 8
 }
 
 /// What the player chose; lives next to the state in `_patch/`.
@@ -266,7 +278,8 @@ pub fn fetch_list(cfg: &Config) -> Result<PatchList> {
         Some(u) => sources.push((u.clone(), String::new())),
         None => sources.push((join(&cfg.patch_url, "patchlist.json"), cfg.patch_url.clone())),
     }
-    for u in &cfg.fallback_urls {
+    let learned = load_state(&cfg.client_dir).sites;
+    for u in cfg.fallback_urls.iter().chain(learned.iter()) {
         let key = u.trim_end_matches('/');
         if !key.is_empty() && !sources.iter().any(|(_, f)| f.trim_end_matches('/') == key) {
             sources.push((join(u, "patchlist.json"), u.clone()));
@@ -294,13 +307,28 @@ pub fn fetch_list(cfg: &Config) -> Result<PatchList> {
         let all: Vec<String> = errors.iter().map(|(u, e)| format!("{u}: {e}")).collect();
         return Err(msg(format!("no patch source answered with a valid patch list: {}", all.join(" | "))));
     };
-    let have = load_state(&cfg.client_dir).list_serial;
+    let mut st = load_state(&cfg.client_dir);
+    let have = st.list_serial;
     if list.serial < have {
         return Err(msg(format!(
             "the newest patch list reachable now has serial {} but this client already applied serial {}: every source is out of date. \
              Nothing was changed; try again later.",
             list.serial, have
         )));
+    }
+    // remember where else this site lives (the list is signed); the newest list decides, so an address the operator
+    // dropped disappears again. Only worth a write when it changed.
+    let mut sites: Vec<String> = Vec::new();
+    for u in &list.sites {
+        let u = u.trim().to_string();
+        if is_site_url(&u) && !sites.iter().any(|x| x.trim_end_matches('/') == u.trim_end_matches('/')) {
+            sites.push(u);
+        }
+    }
+    sites.truncate(MAX_SITES);
+    if sites != st.sites && list.serial >= have {
+        st.sites = sites;
+        let _ = save_state(&cfg.client_dir, &st);
     }
     Ok(list)
 }
